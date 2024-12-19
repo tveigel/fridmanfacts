@@ -1,0 +1,128 @@
+// Collections Structure
+
+/*
+Collection: users
+Additional fields for existing users collection
+*/
+interface User {
+  uid: string;
+  email: string;
+  role: 'user' | 'moderator' | 'admin';
+  displayName: string;
+  photoURL?: string;
+  preferences: {
+    validationThreshold: number; // Default: 10
+    showControversialFlags: boolean;
+    showUnvalidatedFlags: boolean;
+  };
+  createdAt: timestamp;
+  updatedAt: timestamp;
+}
+
+/*
+Collection: factChecks
+Main collection for fact checking flags
+*/
+interface FactCheck {
+  id: string;
+  episodeId: string;
+  transcriptTime: string;
+  flaggedText: string;
+  flaggedTextStart: number; // Character index start in transcript entry
+  flaggedTextEnd: number;   // Character index end in transcript entry
+  submittedBy: string;      // User ID
+  source: string;           // URL or reference
+  context: string;          // User's explanation
+  status: 'UNVALIDATED' | 'VALIDATED_FALSE' | 'VALIDATED_CONTROVERSIAL' | 'VALIDATED_TRUE' | 'REJECTED';
+  voteCount: number;        // Denormalized vote count
+  moderatorId?: string;     // ID of mod who validated/rejected
+  moderatorNote?: string;   // Optional note from moderator
+  createdAt: timestamp;
+  updatedAt: timestamp;
+}
+
+/*
+Collection: votes
+Subcollection of factChecks for vote tracking
+*/
+interface Vote {
+  id: string;
+  userId: string;
+  value: 1 | -1;           // Upvote or downvote
+  createdAt: timestamp;
+}
+
+/*
+Collection: comments
+Subcollection of factChecks for comments
+*/
+interface Comment {
+  id: string;
+  userId: string;
+  text: string;
+  createdAt: timestamp;
+  updatedAt: timestamp;
+}
+
+// Firestore Security Rules
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Helper functions
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+    
+    function isAdmin() {
+      return isAuthenticated() && 
+             get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+    }
+    
+    function isModerator() {
+      return isAuthenticated() && 
+             (get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'moderator' ||
+              get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin');
+    }
+
+    // User profiles
+    match /users/{userId} {
+      allow read: if true;
+      allow create: if isAuthenticated() && request.auth.uid == userId;
+      allow update: if isAuthenticated() && 
+                      (request.auth.uid == userId || isAdmin()) &&
+                      !request.resource.data.diff(resource.data).affectedKeys()
+                        .hasAny(['role']); // Only admins can change roles
+      allow delete: if isAdmin();
+    }
+
+    // Fact checks
+    match /factChecks/{factId} {
+      allow read: if true;
+      allow create: if isAuthenticated();
+      allow update: if isAuthenticated() && 
+                      (resource.data.submittedBy == request.auth.uid || // Author can update
+                       isModerator()); // Moderators can update status
+      allow delete: if isModerator();
+
+      // Votes subcollection
+      match /votes/{voteId} {
+        allow read: if true;
+        allow create: if isAuthenticated() && 
+                       request.resource.data.userId == request.auth.uid &&
+                       !exists(/databases/$(database)/documents/factChecks/$(factId)/votes/$(request.auth.uid));
+        allow update, delete: if isAuthenticated() && 
+                              resource.data.userId == request.auth.uid;
+      }
+
+      // Comments subcollection
+      match /comments/{commentId} {
+        allow read: if true;
+        allow create: if isAuthenticated();
+        allow update: if isAuthenticated() && 
+                       resource.data.userId == request.auth.uid;
+        allow delete: if isAuthenticated() && 
+                       (resource.data.userId == request.auth.uid || isModerator());
+      }
+    }
+  }
+}
