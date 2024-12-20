@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { Search, Settings, X, Star } from 'lucide-react';
 import NotificationsIcon from './NotificationsIcon';
-import { useAuth } from '../../lib/context/AuthContext';
+import { useAuth } from '@/lib/context/AuthContext';
 import Modal from './Modal';
 import Logo from '../Logo';
 import { SettingsMenu } from '../settings/FactCheckSettings';
@@ -30,6 +30,8 @@ export const UserNameWithLevel = ({ userId, displayName = null, className = "" }
     </div>
   );
 };
+
+
 
 export default function Navbar() {
   const [searchQuery, setSearchQuery] = useState('');

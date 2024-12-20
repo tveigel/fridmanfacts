@@ -1,7 +1,8 @@
+// src/lib/context/AuthContext.tsx
+
 "use client";
 
-// lib/context/AuthContext.js
-import { createContext, useContext, useState, useEffect } from "react";
+import { createContext, useContext, useState, useEffect, ReactNode } from "react";
 import { 
   GoogleAuthProvider, 
   signInWithPopup, 
@@ -9,15 +10,21 @@ import {
   onAuthStateChanged,
   createUserWithEmailAndPassword,
   signInWithEmailAndPassword,
-  sendEmailVerification
+  sendEmailVerification,
+  User
 } from "firebase/auth";
 import { auth } from "../firebase/firebaseConfig";
+import { AuthContextType } from "../types/component-types";
 
-const AuthContext = createContext();
+const AuthContext = createContext<AuthContextType | null>(null);
 
-export const AuthProvider = ({ children }) => {
-  const [user, setUser] = useState(null);
-  const [loading, setLoading] = useState(true);
+interface AuthProviderProps {
+  children: ReactNode;
+}
+
+export const AuthProvider = ({ children }: AuthProviderProps): JSX.Element => {
+  const [user, setUser] = useState<User | null>(null);
+  const [loading, setLoading] = useState<boolean>(true);
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (user) => {
@@ -28,7 +35,7 @@ export const AuthProvider = ({ children }) => {
     return () => unsubscribe();
   }, []);
 
-  const login = async () => {
+  const login = async (): Promise<void> => {
     const provider = new GoogleAuthProvider();
     try {
       await signInWithPopup(auth, provider);
@@ -37,17 +44,15 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
-  const loginWithEmail = async (email, password) => {
+  const loginWithEmail = async (email: string, password: string): Promise<void> => {
     try {
       const userCredential = await signInWithEmailAndPassword(auth, email, password);
       
-      // Check if email is verified
       if (!userCredential.user.emailVerified) {
-        // Sign out the user
         await signOut(auth);
         throw new Error("Please verify your email before logging in. Check your inbox for the verification link.");
       }
-    } catch (error) {
+    } catch (error: any) {
       if (error.code === 'auth/wrong-password' || error.code === 'auth/user-not-found') {
         throw new Error("Invalid email or password");
       }
@@ -55,9 +60,8 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
-  const signUpWithEmail = async (email, password) => {
+  const signUpWithEmail = async (email: string, password: string): Promise<string> => {
     try {
-      // Validate password
       if (password.length < 8) {
         throw new Error("Password must be at least 8 characters long");
       }
@@ -71,17 +75,12 @@ export const AuthProvider = ({ children }) => {
         throw new Error("Password must contain at least one number");
       }
       
-      // Create user
       const userCredential = await createUserWithEmailAndPassword(auth, email, password);
-      
-      // Send verification email
       await sendEmailVerification(userCredential.user);
-      
-      // Sign out until email is verified
       await signOut(auth);
       
       return "Please check your email to verify your account before logging in.";
-    } catch (error) {
+    } catch (error: any) {
       if (error.code === 'auth/email-already-in-use') {
         throw new Error("This email is already registered");
       }
@@ -89,7 +88,7 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
-  const logout = async () => {
+  const logout = async (): Promise<void> => {
     try {
       await signOut(auth);
     } catch (error) {
@@ -97,7 +96,7 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
-  const value = {
+  const value: AuthContextType = {
     user,
     login,
     loginWithEmail,
@@ -113,7 +112,7 @@ export const AuthProvider = ({ children }) => {
   );
 };
 
-export const useAuth = () => {
+export const useAuth = (): AuthContextType => {
   const context = useContext(AuthContext);
   if (!context) {
     throw new Error("useAuth must be used within an AuthProvider");
