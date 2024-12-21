@@ -1,5 +1,4 @@
-"use client";
-
+// src/components/fact-checks/FactCheckSubmission.js
 import { useState, useEffect } from 'react';
 import { useAuth } from '../../lib/context/AuthContext';
 import { factCheckService } from '../../lib/services';
@@ -19,6 +18,8 @@ export default function FactCheckSubmission({
 
   // Validate props on mount
   useEffect(() => {
+    console.log('FactCheckSubmission mounted with:', { episodeId, transcriptTime, selectedText, user });
+    
     if (!episodeId) {
       console.error('FactCheckSubmission: episodeId is required');
       setError('Episode ID is missing. Please try again later.');
@@ -31,19 +32,22 @@ export default function FactCheckSubmission({
       console.error('FactCheckSubmission: selectedText is required');
       setError('Selected text is missing. Please try again later.');
     }
-  }, [episodeId, transcriptTime, selectedText]);
+  }, [episodeId, transcriptTime, selectedText, user]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!user) return;
+    if (!user) {
+      setError('You must be logged in to submit a fact check.');
+      return;
+    }
     if (!episodeId || !transcriptTime || !selectedText) {
       setError('Missing required information. Please try again.');
       return;
     }
-
+  
     setIsSubmitting(true);
     setError(null);
-
+  
     try {
       const factCheckData = {
         episodeId,
@@ -53,13 +57,24 @@ export default function FactCheckSubmission({
         source,
         context,
         status: 'UNVALIDATED',
+        upvotes: 0,
+        downvotes: 0
       };
-
+  
       await factCheckService.createFactCheck(factCheckData);
+      
+      // If we get here, the operation was successful
       onClose();
     } catch (error) {
       console.error('Error submitting fact check:', error);
-      setError(error.message || 'Failed to submit fact check. Please try again.');
+      
+      // Check if the fact check might have been created despite the error
+      // This helps prevent duplicate submissions
+      if (error.message?.includes('permission-denied')) {
+        setError('Permission denied. Please try logging out and back in.');
+      } else {
+        setError(error.message || 'Failed to submit fact check. Please try again.');
+      }
     } finally {
       setIsSubmitting(false);
     }

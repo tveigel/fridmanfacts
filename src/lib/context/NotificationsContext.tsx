@@ -1,36 +1,41 @@
+// src/lib/context/NotificationsContext.tsx
 "use client";
 
-import { createContext, useContext, useState, useEffect } from 'react';
-import { collection, query, where, onSnapshot, orderBy, getDocs } from 'firebase/firestore';
+import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import { collection, query, where, onSnapshot, orderBy, getDocs, Timestamp } from 'firebase/firestore';
 import { db } from '../firebase/firebaseConfig';
 import { useAuth } from './AuthContext';
 import { notificationService } from '../services/notificationService';
+import { 
+  Notification, 
+  NotificationsContextType 
+} from '../types/core-types';
 
-const NotificationsContext = createContext();
+const NotificationsContext = createContext<NotificationsContextType | null>(null);
 
-export function NotificationsProvider({ children }) {
+interface NotificationsProviderProps {
+  children: ReactNode;
+}
+
+export function NotificationsProvider({ children }: NotificationsProviderProps): JSX.Element {
   const { user } = useAuth();
-  const [notifications, setNotifications] = useState([]);
-  const [unreadCount, setUnreadCount] = useState(0);
-  const [unviewedCount, setUnviewedCount] = useState(0);
-  const [error, setError] = useState(null);
+  const [notifications, setNotifications] = useState<Notification[]>([]);
+  const [unreadCount, setUnreadCount] = useState<number>(0);
+  const [unviewedCount, setUnviewedCount] = useState<number>(0);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     let unsubscribe = () => {};
 
     const setupNotificationsListener = async () => {
       if (!user) {
-        console.log('No user logged in, clearing notifications state');
         setNotifications([]);
         setUnreadCount(0);
         setUnviewedCount(0);
         return;
       }
 
-      console.log('Setting up notifications listener for user:', user.uid);
-
       try {
-        // Set up real-time listener
         const notificationsRef = collection(db, 'notifications');
         const q = query(
           notificationsRef,
@@ -40,20 +45,16 @@ export function NotificationsProvider({ children }) {
 
         unsubscribe = onSnapshot(q, 
           (snapshot) => {
-            console.log(`Received notification update, ${snapshot.docs.length} notifications`);
-            
             const newNotifications = snapshot.docs.map(doc => ({
               id: doc.id,
               ...doc.data(),
               createdAt: doc.data().createdAt?.toDate() || new Date()
-            }));
+            })) as Notification[];
 
             setNotifications(newNotifications);
             
             const unreadCount = newNotifications.filter(n => !n.read).length;
             const unviewedCount = newNotifications.filter(n => !n.viewed).length;
-            
-            console.log('Updated notification counts:', { unreadCount, unviewedCount });
             
             setUnreadCount(unreadCount);
             setUnviewedCount(unviewedCount);
@@ -64,22 +65,21 @@ export function NotificationsProvider({ children }) {
           }
         );
 
-        // Get initial notifications
         const initialSnapshot = await getDocs(q);
         const initialNotifications = initialSnapshot.docs.map(doc => ({
           id: doc.id,
           ...doc.data(),
-          createdAt: doc.data().createdAt?.toDate() || new Date()
-        }));
-
-        console.log(`Loaded ${initialNotifications.length} initial notifications`);
+          createdAt: doc.data().createdAt instanceof Timestamp ? 
+            doc.data().createdAt.toDate() : 
+            new Date()
+        })) as Notification[];
         
         setNotifications(initialNotifications);
         setUnreadCount(initialNotifications.filter(n => !n.read).length);
         setUnviewedCount(initialNotifications.filter(n => !n.viewed).length);
       } catch (error) {
         console.error('Error setting up notifications:', error);
-        setError(error.message);
+        setError(error instanceof Error ? error.message : 'Unknown error');
       }
     };
 
@@ -87,14 +87,13 @@ export function NotificationsProvider({ children }) {
     return () => unsubscribe();
   }, [user]);
 
-  const contextValue = {
+  const contextValue: NotificationsContextType = {
     notifications,
     unreadCount,
     unviewedCount,
     setUnviewedCount,
     error,
-    markAsRead: async (notificationId) => {
-      console.log('Marking notification as read:', notificationId);
+    markAsRead: async (notificationId: string) => {
       try {
         await notificationService.markAsRead(notificationId);
       } catch (error) {
@@ -102,7 +101,6 @@ export function NotificationsProvider({ children }) {
       }
     },
     markAllAsRead: async () => {
-      console.log('Marking all notifications as read');
       if (!user) return;
       try {
         await notificationService.markAllAsRead(user.uid);
@@ -111,7 +109,6 @@ export function NotificationsProvider({ children }) {
       }
     },
     markNotificationsAsViewed: async () => {
-      console.log('Marking notifications as viewed');
       if (!user) return;
       try {
         await notificationService.markNotificationsAsViewed(user.uid);
@@ -128,10 +125,10 @@ export function NotificationsProvider({ children }) {
   );
 }
 
-export const useNotifications = () => {
+export function useNotifications(): NotificationsContextType {
   const context = useContext(NotificationsContext);
-  if (context === undefined) {
+  if (!context) {
     throw new Error('useNotifications must be used within a NotificationsProvider');
   }
   return context;
-};
+}

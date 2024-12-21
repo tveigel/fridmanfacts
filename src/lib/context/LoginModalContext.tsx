@@ -1,24 +1,40 @@
+// src/lib/context/LoginModalContext.tsx
 "use client";
 
-import React, { createContext, useContext, useState } from 'react';
+import { createContext, useContext, useState, ReactNode } from 'react';
 import { X } from 'lucide-react';
 import Modal from '../../components/common/Modal';
 import Login from '../../components/auth/Login';
 
-const LoginModalContext = createContext(null);
+interface LoginModalContextType {
+  isOpen: boolean;
+  showLoginModal: () => void;
+  hideLoginModal: () => void;
+}
 
-export function LoginModalProvider({ children }) {
-  const [isOpen, setIsOpen] = useState(false);
+interface LoginModalProviderProps {
+  children: ReactNode;
+}
+
+const LoginModalContext = createContext<LoginModalContextType | null>(null);
+
+export function LoginModalProvider({ children }: LoginModalProviderProps): JSX.Element {
+  const [isOpen, setIsOpen] = useState<boolean>(false);
 
   const showLoginModal = () => setIsOpen(true);
   const hideLoginModal = () => setIsOpen(false);
 
+  const value: LoginModalContextType = {
+    isOpen,
+    showLoginModal,
+    hideLoginModal
+  };
+
   return (
-    <LoginModalContext.Provider value={{ showLoginModal, hideLoginModal }}>
+    <LoginModalContext.Provider value={value}>
       {children}
       <Modal isOpen={isOpen} onClose={hideLoginModal}>
         <div className="p-6 bg-white rounded-lg max-w-md w-full mx-auto relative">
-          {/* Close Button */}
           <button
             onClick={hideLoginModal}
             className="absolute top-4 right-4 p-2 rounded-full hover:bg-gray-100 transition-colors"
@@ -42,9 +58,9 @@ export function LoginModalProvider({ children }) {
   );
 }
 
-export function useLoginModal() {
+export function useLoginModal(): LoginModalContextType {
   const context = useContext(LoginModalContext);
-  if (context === null) {
+  if (!context) {
     throw new Error('useLoginModal must be used within a LoginModalProvider');
   }
   return context;

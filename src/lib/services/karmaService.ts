@@ -12,7 +12,8 @@ import {
     serverTimestamp,
     runTransaction,
     WriteBatch,
-    writeBatch
+    writeBatch,
+    onSnapshot
   } from 'firebase/firestore';
   import { db } from '../firebase/firebaseConfig';
   import type { KarmaAction, KarmaHistoryEntry, UserKarma } from '../types/types';

@@ -102,6 +102,9 @@ for root, dirs, files in os.walk("src"):
     if not include_tests:
         dirs[:] = [d for d in dirs if d != "__tests__"]
 
+        # and skip __mocks__ directories
+        dirs[:] = [d for d in dirs if d != "__mocks__"]
+
     for file in files:
         filepath = os.path.join(root, file)
         if is_text_file(file):

@@ -1,12 +1,12 @@
 // src/lib/services/__tests__/voteService.test.ts
-import { 
-  collection, 
-  doc, 
+import {
+  collection,
+  doc,
   getDocs,
-  setDoc, 
+  setDoc,
   deleteDoc,
   runTransaction,
-  serverTimestamp
+  serverTimestamp,
 } from 'firebase/firestore';
 import { voteService } from '../voteService';
 import { db } from '../../firebase/firebaseConfig';
@@ -19,27 +19,30 @@ jest.mock('firebase/firestore', () => ({
   setDoc: jest.fn(),
   deleteDoc: jest.fn(),
   runTransaction: jest.fn(),
-  serverTimestamp: jest.fn()
+  serverTimestamp: jest.fn(),
 }));
 
 jest.mock('../../firebase/firebaseConfig', () => ({
-  db: {}
+  db: {},
 }));
 
 describe('voteService', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    jest.spyOn(console, 'error').mockImplementation(() => {}); // Suppress console.error
+  });
+
+  afterEach(() => {
+    jest.restoreAllMocks(); // Restore console.error to its original state
   });
 
   describe('getUserVotes', () => {
     it('should fetch votes for multiple fact checks', async () => {
-      const mockVoteDocs = [
-        { id: 'user1', data: () => ({ value: 1 }) }
-      ];
-      
+      const mockVoteDocs = [{ id: 'user1', data: () => ({ value: 1 }) }];
+
       (collection as jest.Mock).mockReturnValue('votesCollection');
-      (getDocs as jest.Mock).mockResolvedValue({ 
-        forEach: (callback: (doc: any) => void) => mockVoteDocs.forEach(callback)
+      (getDocs as jest.Mock).mockResolvedValue({
+        forEach: (callback: (doc: any) => void) => mockVoteDocs.forEach(callback),
       });
 
       const result = await voteService.getUserVotes('user1', ['factCheck1']);
@@ -54,13 +57,13 @@ describe('voteService', () => {
       const mockTransaction = {
         get: jest.fn().mockResolvedValue({
           exists: () => true,
-          data: () => ({ upvotes: 1, downvotes: 0 })
+          data: () => ({ upvotes: 1, downvotes: 0 }),
         }),
         set: jest.fn(),
-        update: jest.fn()
+        update: jest.fn(),
       };
 
-      (runTransaction as jest.Mock).mockImplementation((_, callback) => 
+      (runTransaction as jest.Mock).mockImplementation((_, callback) =>
         Promise.resolve(callback(mockTransaction))
       );
 
@@ -74,13 +77,13 @@ describe('voteService', () => {
       const mockTransaction = {
         get: jest.fn().mockResolvedValue({
           exists: () => true,
-          data: () => ({ upvotes: 1, downvotes: 0 })
+          data: () => ({ upvotes: 1, downvotes: 0 }),
         }),
         delete: jest.fn(),
-        update: jest.fn()
+        update: jest.fn(),
       };
 
-      (runTransaction as jest.Mock).mockImplementation((_, callback) => 
+      (runTransaction as jest.Mock).mockImplementation((_, callback) =>
         Promise.resolve(callback(mockTransaction))
       );
 
@@ -93,17 +96,17 @@ describe('voteService', () => {
     it('should throw error if fact check does not exist', async () => {
       const mockTransaction = {
         get: jest.fn().mockResolvedValue({
-          exists: () => false
-        })
+          exists: () => false,
+        }),
       };
 
-      (runTransaction as jest.Mock).mockImplementation((_, callback) => 
-        Promise.reject(new Error("Fact check does not exist!"))
+      (runTransaction as jest.Mock).mockImplementation((_, callback) =>
+        Promise.reject(new Error('Fact check does not exist!'))
       );
 
-      await expect(voteService.submitVote('factCheck1', 'user1', 1))
-        .rejects
-        .toThrow("Fact check does not exist!");
+      await expect(voteService.submitVote('factCheck1', 'user1', 1)).rejects.toThrow(
+        'Fact check does not exist!'
+      );
     });
   });
 });

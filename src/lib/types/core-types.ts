@@ -203,3 +203,40 @@ export class AppError extends Error {
     this.name = 'AppError';
   }
 }
+
+// Enhanced Error Types
+export interface ServiceErrorDetail {
+  field?: string;
+  message: string;
+  code?: string;
+}
+
+export interface ServiceError {
+  message: string;
+  code: string;
+  details?: ServiceErrorDetail[];
+  statusCode: number;
+}
+
+// Enhanced Service Response
+export interface ServiceResponse<T> {
+  data?: T;
+  error?: ServiceError;
+  success: boolean;
+  meta?: {
+    timestamp: number;
+    processingTime?: number;
+  };
+}
+
+// Add these utility types for Firebase interactions
+export interface FirebaseDocumentData {
+  id: string;
+  [key: string]: any;
+}
+
+export type FirebaseQueryConstraint = {
+  fieldPath: string;
+  opStr: string;
+  value: any;
+};

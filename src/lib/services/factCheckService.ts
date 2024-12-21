@@ -43,27 +43,40 @@ export const factCheckService = {
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp()
       };
-
+  
       // Add the fact check document
       const factCheckRef = await addDoc(collection(db, 'factChecks'), fullFactCheckData);
-
-      // Update episode stats
-      const episodeRef = doc(db, 'episodes', factCheckData.episodeId);
-      await updateDoc(episodeRef, {
-        factCheckCount: increment(1),
-        updatedAt: serverTimestamp()
-      });
-
-    // Add karma for submitting a fact check
-    await karmaService.addKarmaHistoryEntry(
-      factCheckData.submittedBy,
-      'SUBMIT_FACT',
-      factCheckRef.id
-    );
-
+      
+      try {
+        // Update episode stats - wrapped in separate try/catch to not fail the whole operation
+        const episodeRef = doc(db, 'episodes', factCheckData.episodeId);
+        await updateDoc(episodeRef, {
+          factCheckCount: increment(1),
+          updatedAt: serverTimestamp()
+        });
+      } catch (statsError) {
+        console.warn('Non-critical error updating episode stats:', statsError);
+        // Don't throw here as the main operation succeeded
+      }
+  
+      try {
+        // Add karma - wrapped in separate try/catch
+        await karmaService.addKarmaHistoryEntry(
+          factCheckData.submittedBy,
+          'SUBMIT_FACT',
+          factCheckRef.id
+        );
+      } catch (karmaError) {
+        console.warn('Non-critical error updating karma:', karmaError);
+        // Don't throw here as the main operation succeeded
+      }
+  
       return factCheckRef.id;
     } catch (error) {
       console.error('Error creating fact check:', error);
+      if (error.code === 'permission-denied') {
+        throw new Error('You do not have permission to create fact checks. Please ensure you are logged in.');
+      }
       throw error;
     }
   },

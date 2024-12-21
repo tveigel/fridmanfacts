@@ -1,11 +1,17 @@
+// src/lib/context/FactCheckSettingsContext.tsx
 "use client";
 
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { doc, getDoc, setDoc, serverTimestamp } from 'firebase/firestore';
 import { db } from '../firebase/firebaseConfig';
 import { useAuth } from './AuthContext';
+import { 
+  FactCheck, 
+  FactCheckSettings, 
+  FactCheckSettingsContextType 
+} from '../types/core-types';
 
-export const SYSTEM_DEFAULT_SETTINGS = {
+export const SYSTEM_DEFAULT_SETTINGS: FactCheckSettings = {
   showValidatedTrue: true,
   showValidatedFalse: false,
   showValidatedControversial: true,
@@ -14,22 +20,24 @@ export const SYSTEM_DEFAULT_SETTINGS = {
   moderatorOnly: false,
 };
 
-const FactCheckSettingsContext = createContext(null);
+interface FactCheckSettingsProviderProps {
+  children: ReactNode;
+}
 
-export function FactCheckSettingsProvider({ children }) {
+const FactCheckSettingsContext = createContext<FactCheckSettingsContextType | null>(null);
+
+export function FactCheckSettingsProvider({ children }: FactCheckSettingsProviderProps): JSX.Element {
   const { user } = useAuth();
-  const [settings, setSettings] = useState(SYSTEM_DEFAULT_SETTINGS);
-  const [userDefaults, setUserDefaults] = useState(null);
-  const [loading, setLoading] = useState(true);
+  const [settings, setSettings] = useState<FactCheckSettings>(SYSTEM_DEFAULT_SETTINGS);
+  const [userDefaults, setUserDefaults] = useState<FactCheckSettings | null>(null);
+  const [loading, setLoading] = useState<boolean>(true);
 
-  // Load settings on mount and when user changes
   useEffect(() => {
     async function loadSettings() {
       try {
         setLoading(true);
         
         if (user) {
-          // Try to load user-specific settings from Firestore
           const userSettingsRef = doc(db, 'userSettings', user.uid);
           const userSettingsDoc = await getDoc(userSettingsRef);
           
@@ -37,13 +45,12 @@ export function FactCheckSettingsProvider({ children }) {
             const data = userSettingsDoc.data();
             const savedDefaults = data.defaultSettings || SYSTEM_DEFAULT_SETTINGS;
             setUserDefaults(savedDefaults);
-            setSettings(savedDefaults); // Initialize with user's defaults
+            setSettings(savedDefaults);
           } else {
             setUserDefaults(SYSTEM_DEFAULT_SETTINGS);
             setSettings(SYSTEM_DEFAULT_SETTINGS);
           }
         } else {
-          // If no user is logged in, try to load from localStorage
           const savedSettings = localStorage.getItem('factCheckSettings');
           if (savedSettings) {
             setSettings(JSON.parse(savedSettings));
@@ -64,42 +71,37 @@ export function FactCheckSettingsProvider({ children }) {
     loadSettings();
   }, [user]);
 
-  // Save settings to localStorage when they change
   useEffect(() => {
     if (!loading) {
       localStorage.setItem('factCheckSettings', JSON.stringify(settings));
     }
   }, [settings, loading]);
 
-  const updateSettings = (newSettings) => {
+  const updateSettings = (newSettings: FactCheckSettings): void => {
     setSettings(newSettings);
   };
 
-  const updateSingleSetting = (key, value) => {
+  const updateSingleSetting = (key: keyof FactCheckSettings, value: boolean | number): void => {
     setSettings(prev => ({
       ...prev,
       [key]: value
     }));
   };
 
-  const saveAsDefault = async () => {
+  const saveAsDefault = async (): Promise<boolean> => {
     if (!user) return false;
 
     try {
       const userSettingsRef = doc(db, 'userSettings', user.uid);
       const updatedDefaults = { ...settings };
       
-      // Save to Firestore
       await setDoc(userSettingsRef, {
         defaultSettings: updatedDefaults,
         currentSettings: updatedDefaults,
         updatedAt: serverTimestamp()
       }, { merge: true });
       
-      // Update local state
       setUserDefaults(updatedDefaults);
-      
-      // Update localStorage
       localStorage.setItem('factCheckSettings', JSON.stringify(updatedDefaults));
       
       return true;
@@ -109,14 +111,13 @@ export function FactCheckSettingsProvider({ children }) {
     }
   };
 
-  const resetToDefaults = () => {
-    // Reset to user defaults if they exist, otherwise use system defaults
+  const resetToDefaults = (): void => {
     const defaultsToUse = userDefaults || SYSTEM_DEFAULT_SETTINGS;
     setSettings(defaultsToUse);
     localStorage.setItem('factCheckSettings', JSON.stringify(defaultsToUse));
   };
 
-  const shouldShowFactCheck = (factCheck) => {
+  const shouldShowFactCheck = (factCheck: FactCheck): boolean => {
     if (!factCheck) return false;
 
     const netVotes = (factCheck.upvotes || 0) - (factCheck.downvotes || 0);
@@ -144,26 +145,28 @@ export function FactCheckSettingsProvider({ children }) {
     }
   };
 
+  const contextValue: FactCheckSettingsContextType = {
+    settings,
+    updateSettings,
+    updateSingleSetting,
+    resetToDefaults,
+    shouldShowFactCheck,
+    saveAsDefault,
+    loading,
+    userDefaults,
+    SYSTEM_DEFAULT_SETTINGS
+  };
+
   return (
-    <FactCheckSettingsContext.Provider value={{
-      settings,
-      updateSettings,
-      updateSingleSetting,
-      resetToDefaults,
-      shouldShowFactCheck,
-      saveAsDefault,
-      loading,
-      userDefaults,
-      SYSTEM_DEFAULT_SETTINGS
-    }}>
+    <FactCheckSettingsContext.Provider value={contextValue}>
       {children}
     </FactCheckSettingsContext.Provider>
   );
 }
 
-export function useFactCheckSettings() {
+export function useFactCheckSettings(): FactCheckSettingsContextType {
   const context = useContext(FactCheckSettingsContext);
-  if (context === null) {
+  if (!context) {
     throw new Error('useFactCheckSettings must be used within a FactCheckSettingsProvider');
   }
   return context;
