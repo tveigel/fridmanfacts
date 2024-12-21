@@ -3,8 +3,17 @@ import { useState, useEffect } from 'react';
 import { useAuth } from '../lib/context/AuthContext';
 import { karmaService } from '../lib/services/karmaService';
 import type { KarmaHistoryEntry } from '../lib/types/types';
+import { 
+  collection, 
+  query, 
+  where, 
+  orderBy, 
+  onSnapshot,
+  doc 
+} from 'firebase/firestore';
+import { db } from '../lib/firebase/firebaseConfig';
 
-export function useKarma() {
+export function useKarma(targetUserId?: string) {
   const { user } = useAuth();
   const [karma, setKarma] = useState<number | null>(null);
   const [karmaHistory, setKarmaHistory] = useState<KarmaHistoryEntry[]>([]);
@@ -12,40 +21,61 @@ export function useKarma() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    async function fetchKarma() {
-      if (!user) {
-        setKarma(null);
-        setKarmaHistory([]);
-        setLoading(false);
-        return;
-      }
-
-      try {
-        setLoading(true);
-        setError(null);
-
-        // Fetch total karma
-        const totalKarma = await karmaService.getUserKarma(user.uid);
-        setKarma(totalKarma);
-
-        // Fetch karma history
-        const history = await karmaService.getKarmaHistory(user.uid);
-        setKarmaHistory(history);
-      } catch (err) {
-        console.error('Error fetching karma:', err);
-        setError(err instanceof Error ? err.message : 'Error fetching karma');
-      } finally {
-        setLoading(false);
-      }
+    const userId = targetUserId || user?.uid;
+    if (!userId) {
+      setKarma(null);
+      setKarmaHistory([]);
+      setLoading(false);
+      return;
     }
 
-    fetchKarma();
-  }, [user]);
+    setLoading(true);
+    setError(null);
 
-  return {
-    karma,
-    karmaHistory,
-    loading,
-    error
-  };
+    // Create real-time listener for karma updates
+    const userKarmaRef = doc(db, 'userKarma', userId);
+    const unsubscribeKarma = onSnapshot(userKarmaRef, 
+      (doc) => {
+        if (doc.exists()) {
+          setKarma(doc.data().totalKarma);
+        } else {
+          setKarma(0);
+        }
+      },
+      (error) => {
+        console.error('Error in karma listener:', error);
+        setError(error.message);
+      }
+    );
+
+    // Create real-time listener for karma history
+    const historyRef = collection(db, 'karmaHistory');
+    const q = query(
+      historyRef,
+      where('userId', '==', userId),
+      orderBy('timestamp', 'desc')
+    );
+
+    const unsubscribeHistory = onSnapshot(q,
+      (snapshot) => {
+        const history = snapshot.docs.map(doc => ({
+          id: doc.id,
+          ...doc.data()
+        })) as KarmaHistoryEntry[];
+        setKarmaHistory(history);
+        setLoading(false);
+      },
+      (error) => {
+        console.error('Error in karma history listener:', error);
+        setError(error.message);
+      }
+    );
+
+    return () => {
+      unsubscribeKarma();
+      unsubscribeHistory();
+    };
+  }, [user?.uid, targetUserId]);
+
+  return { karma, karmaHistory, loading, error };
 }

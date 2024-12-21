@@ -81,7 +81,7 @@ export const factCheckService = {
     }
   },
 
-// Modify the updateFactCheck method
+
 async updateFactCheck(factCheckId: string, updates: Partial<FactCheck>): Promise<void> {
   try {
     const factCheckRef = doc(db, 'factChecks', factCheckId);
@@ -95,18 +95,29 @@ async updateFactCheck(factCheckId: string, updates: Partial<FactCheck>): Promise
     
     // Handle karma for validation status changes
     if (updates.moderatorValidation && factCheck.submittedBy) {
-      if (updates.moderatorValidation === 'VALIDATED_TRUE') {
-        await karmaService.addKarmaHistoryEntry(
-          factCheck.submittedBy,
-          'FACT_VALIDATED_TRUE',
-          factCheckId
-        );
-      } else if (updates.moderatorValidation === 'VALIDATED_FALSE') {
-        await karmaService.addKarmaHistoryEntry(
-          factCheck.submittedBy,
-          'FACT_VALIDATED_FALSE',
-          factCheckId
-        );
+      switch (updates.moderatorValidation) {
+        case 'VALIDATED_TRUE':
+          await karmaService.addKarmaHistoryEntry(
+            factCheck.submittedBy,
+            'FACT_VALIDATED_TRUE',
+            factCheckId
+          );
+          break;
+        case 'VALIDATED_FALSE':
+          await karmaService.addKarmaHistoryEntry(
+            factCheck.submittedBy,
+            'FACT_VALIDATED_FALSE',
+            factCheckId
+          );
+          break;
+        case 'VALIDATED_CONTROVERSIAL':
+          // Add new karma action for controversial
+          await karmaService.addKarmaHistoryEntry(
+            factCheck.submittedBy,
+            'FACT_VALIDATED_CONTROVERSIAL',
+            factCheckId
+          );
+          break;
       }
     }
 

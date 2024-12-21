@@ -6,16 +6,34 @@ import FlagIcon from '../fact-checks/FlagIcon';
 import { getStatusColors } from '../../lib/utils/colors';
 import { getVoteBasedStyle } from '../../lib/utils/votingUtils';
 
+
+const sortByDate = (a, b) => {
+  const dateA = a.createdAt?.seconds ? new Date(a.createdAt.seconds * 1000) : new Date(0);
+  const dateB = b.createdAt?.seconds ? new Date(b.createdAt.seconds * 1000) : new Date(0);
+  return dateB.getTime() - dateA.getTime();
+};
+
 export default function ProfileActivity({ activities }) {
   const [activeTab, setActiveTab] = useState('factChecks');
+  const [showAll, setShowAll] = useState(false);
   const { factChecks, comments } = activities;
+
+  const sortedFactChecks = [...factChecks].sort(sortByDate);
+  const sortedComments = [...comments].sort(sortByDate);
+
+  const displayedFactChecks = showAll ? sortedFactChecks : sortedFactChecks.slice(0, 5);
+  const displayedComments = showAll ? sortedComments : sortedComments.slice(0, 5);
+
 
   return (
     <div>
       {/* Tabs */}
       <div className="flex gap-4 mb-6">
         <button
-          onClick={() => setActiveTab('factChecks')}
+          onClick={() => {
+            setActiveTab('factChecks');
+            setShowAll(false);
+          }}
           className={`px-4 py-2 rounded-lg font-medium ${
             activeTab === 'factChecks'
               ? 'bg-black text-white'
@@ -25,7 +43,10 @@ export default function ProfileActivity({ activities }) {
           Fact Checks
         </button>
         <button
-          onClick={() => setActiveTab('comments')}
+          onClick={() => {
+            setActiveTab('comments');
+            setShowAll(false);
+          }}
           className={`px-4 py-2 rounded-lg font-medium ${
             activeTab === 'comments'
               ? 'bg-black text-white'
@@ -35,25 +56,48 @@ export default function ProfileActivity({ activities }) {
           Comments
         </button>
       </div>
-
-      {/* Content */}
+  
       <div className="space-y-4">
         {activeTab === 'factChecks' ? (
-          factChecks.length > 0 ? (
-            factChecks.map(factCheck => (
-              <FactCheckCard key={factCheck.id} factCheck={factCheck} />
-            ))
-          ) : (
-            <EmptyState message="No fact checks submitted yet" />
-          )
+          <>
+            {displayedFactChecks.length > 0 ? (
+              <>
+                {displayedFactChecks.map(factCheck => (
+                  <FactCheckCard key={factCheck.id} factCheck={factCheck} />
+                ))}
+                {sortedFactChecks.length > 5 && !showAll && (
+                  <button
+                    onClick={() => setShowAll(true)}
+                    className="w-full py-3 mt-4 text-blue-600 hover:text-blue-800 bg-white rounded-lg shadow hover:shadow-md transition-all"
+                  >
+                    Show More ({sortedFactChecks.length - 5} remaining)
+                  </button>
+                )}
+              </>
+            ) : (
+              <EmptyState message="No fact checks yet" />
+            )}
+          </>
         ) : (
-          comments.length > 0 ? (
-            comments.map(comment => (
-              <CommentCard key={comment.id} comment={comment} />
-            ))
-          ) : (
-            <EmptyState message="No comments yet" />
-          )
+          <>
+            {displayedComments.length > 0 ? (
+              <>
+                {displayedComments.map(comment => (
+                  <CommentCard key={comment.id} comment={comment} />
+                ))}
+                {sortedComments.length > 5 && !showAll && (
+                  <button
+                    onClick={() => setShowAll(true)}
+                    className="w-full py-3 mt-4 text-blue-600 hover:text-blue-800 bg-white rounded-lg shadow hover:shadow-md transition-all"
+                  >
+                    Show More ({sortedComments.length - 5} remaining)
+                  </button>
+                )}
+              </>
+            ) : (
+              <EmptyState message="No comments yet" />
+            )}
+          </>
         )}
       </div>
     </div>
