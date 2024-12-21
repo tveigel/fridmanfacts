@@ -63,24 +63,38 @@ export function useFactChecks({ episodeId }: { episodeId: string }) {
 
   const handleVote = async (factCheckId: string, value: number) => {
     if (!user) return;
-
+  
     try {
       const previousValue = userVotes[factCheckId] || 0;
-      if (previousValue === value) return;
-
+      
+      // Don't do anything if trying to set the same vote value
+      if (previousValue === value) {
+        value = 0; // Convert to unvote
+      }
+  
       // Optimistic update for user votes
-      setUserVotes(prev => ({ ...prev, [factCheckId]: value }));
-
+      setUserVotes(prev => ({
+        ...prev,
+        [factCheckId]: value === previousValue ? 0 : value
+      }));
+  
       // Optimistic update for fact check counts
       setFactChecks(prev => {
         const updated = { ...prev };
         Object.keys(updated).forEach(time => {
           updated[time] = updated[time].map(fc => {
             if (fc.id === factCheckId) {
+              const newUpvotes = Math.max(0, (fc.upvotes || 0) + 
+                (value === 1 ? 1 : 0) - 
+                (previousValue === 1 ? 1 : 0));
+              const newDownvotes = Math.max(0, (fc.downvotes || 0) + 
+                (value === -1 ? 1 : 0) - 
+                (previousValue === -1 ? 1 : 0));
+              
               return {
                 ...fc,
-                upvotes: (fc.upvotes || 0) + (value === 1 ? 1 : 0) - (previousValue === 1 ? 1 : 0),
-                downvotes: (fc.downvotes || 0) + (value === -1 ? 1 : 0) - (previousValue === -1 ? 1 : 0)
+                upvotes: newUpvotes,
+                downvotes: newDownvotes
               };
             }
             return fc;
@@ -88,7 +102,7 @@ export function useFactChecks({ episodeId }: { episodeId: string }) {
         });
         return updated;
       });
-
+  
       await voteService.submitVote(factCheckId, user.uid, value, previousValue);
     } catch (error) {
       console.error('Error submitting vote:', error);

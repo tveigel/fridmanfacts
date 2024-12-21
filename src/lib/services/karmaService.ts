@@ -19,19 +19,21 @@ import {
   import type { KarmaAction, KarmaHistoryEntry, UserKarma } from '../types/types';
   
   // Karma point values for different actions
-  const KARMA_POINTS = {
-    SUBMIT_FACT: 10,
-    FACT_VALIDATED_TRUE: 20,
+  export const KARMA_POINTS = {
+    SUBMIT_FACT: 15,
+    FACT_VALIDATED_TRUE: 30,
     FACT_VALIDATED_FALSE: -15,
-    FACT_UPVOTED: 2,
+    FACT_VALIDATED_CONTROVERSIAL: 5,
+    FACT_DELETED: -25,
+    FACT_UPVOTED: 4,
     FACT_DOWNVOTED: -1,
     SUBMIT_COMMENT: 1,
-    COMMENT_UPVOTED: 1,
+    COMMENT_UPVOTED: 2,
     COMMENT_DOWNVOTED: -1,
     UPVOTE_GIVEN: 1,
-    DOWNVOTE_CORRECT: 1,
-    DOWNVOTE_VALIDATED_FACT: -2
-  } as const;
+    DOWNVOTE_CORRECT: 2,
+    DOWNVOTE_VALIDATED_FACT: -3
+  };
   
   export const karmaService = {
     async initializeUserKarma(userId: string): Promise<void> {
@@ -78,7 +80,7 @@ import {
       targetId: string
     ): Promise<boolean> {
       try {
-        // Check if this action was already recorded to prevent farming
+        // First check if this exact action was already recorded
         const historyRef = collection(db, 'karmaHistory');
         const q = query(
           historyRef,
@@ -87,50 +89,49 @@ import {
           where('targetId', '==', targetId)
         );
         const existing = await getDocs(q);
-  
+    
         if (!existing.empty) {
           console.log('Karma action already recorded');
           return false;
         }
-  
-        const batch = writeBatch(db);
-  
-        // Create history entry
+    
+        // Create a new doc reference for the history entry
         const historyDocRef = doc(collection(db, 'karmaHistory'));
-        const historyEntry = {
-          userId,
-          action,
-          points: KARMA_POINTS[action],
-          targetId,
-          timestamp: serverTimestamp()
-        };
-  
-        batch.set(historyDocRef, historyEntry);
-  
-        // Update total karma
         const userKarmaRef = doc(db, 'userKarma', userId);
-        const userKarmaDoc = await getDoc(userKarmaRef);
-  
-        if (!userKarmaDoc.exists()) {
-          batch.set(userKarmaRef, {
+    
+        await runTransaction(db, async (transaction) => {
+          // Do all reads first
+          const userKarmaDoc = await transaction.get(userKarmaRef);
+    
+          // Then do all writes
+          const historyEntry = {
             userId,
-            totalKarma: 10 + KARMA_POINTS[action],
-            lastUpdated: serverTimestamp()
-          });
-        } else {
-          batch.update(userKarmaRef, {
-            totalKarma: increment(KARMA_POINTS[action]),
-            lastUpdated: serverTimestamp()
-          });
-        }
-  
-        // Commit the batch
-        await batch.commit();
-  
+            action,
+            points: KARMA_POINTS[action],
+            targetId,
+            timestamp: serverTimestamp()
+          };
+    
+          transaction.set(historyDocRef, historyEntry);
+    
+          if (!userKarmaDoc.exists()) {
+            transaction.set(userKarmaRef, {
+              userId,
+              totalKarma: 10 + KARMA_POINTS[action],
+              lastUpdated: serverTimestamp()
+            });
+          } else {
+            transaction.update(userKarmaRef, {
+              totalKarma: increment(KARMA_POINTS[action]),
+              lastUpdated: serverTimestamp()
+            });
+          }
+        });
+    
         return true;
       } catch (error) {
         console.error('Error updating karma:', error);
-        return false;
+        throw error; // Changed to throw error for better error handling
       }
     },
   
