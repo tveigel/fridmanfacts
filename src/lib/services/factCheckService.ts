@@ -34,98 +34,114 @@ export const factCheckService = {
     }
   },
 
-// In src\lib\services\factCheckService.ts
-// Find the createFactCheck function
-
-async createFactCheck(factCheckData: Omit<FactCheck, 'id' | 'voteCount' | 'createdAt' | 'updatedAt'>): Promise<string> {
-  try {
-    // Prepare the fact check data with timestamps and initial vote count
-    const fullFactCheckData = {
-      ...factCheckData,
-      voteCount: 0,
-      createdAt: serverTimestamp(),
-      updatedAt: serverTimestamp()
-    };
-
-    // Add the fact check document - this is the core operation
-    const factCheckRef = await addDoc(collection(db, 'factChecks'), fullFactCheckData);
-
-    // Try to update episode stats, but don't let it block fact check creation
+  async createFactCheck(factCheckData: Omit<FactCheck, 'id' | 'voteCount' | 'createdAt' | 'updatedAt'>): Promise<string> {
     try {
+      // Prepare the fact check data with timestamps and initial vote count
+      const fullFactCheckData = {
+        ...factCheckData,
+        voteCount: 0,
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp()
+      };
+
+      // Add the fact check document
+      const factCheckRef = await addDoc(collection(db, 'factChecks'), fullFactCheckData);
+
+      // Update episode stats
       const episodeRef = doc(db, 'episodes', factCheckData.episodeId);
       await updateDoc(episodeRef, {
         factCheckCount: increment(1),
         updatedAt: serverTimestamp()
       });
-    } catch (statsError) {
-      console.error('Error updating episode stats:', statsError);
-      // Don't throw - fact check was still created successfully
-    }
 
-    // Try to add karma, but don't let karma errors block fact check creation
+    // Add karma for submitting a fact check
+    await karmaService.addKarmaHistoryEntry(
+      factCheckData.submittedBy,
+      'SUBMIT_FACT',
+      factCheckRef.id
+    );
+
+      return factCheckRef.id;
+    } catch (error) {
+      console.error('Error creating fact check:', error);
+      throw error;
+    }
+  },
+
+  async updateFactCheck(factCheckId: string, updates: Partial<FactCheck>): Promise<void> {
     try {
-      await karmaService.addKarmaHistoryEntry(
-        factCheckData.submittedBy,
-        'SUBMIT_FACT',
-        factCheckRef.id
-      );
-    } catch (karmaError) {
-      console.error('Error adding karma:', karmaError);
-      // Don't throw - fact check was still created successfully
-    }
-
-    // Return the ID since the core operation succeeded
-    return factCheckRef.id;
-    
-  } catch (error) {
-    console.error('Error in core fact check creation:', error);
-    throw error;
-  }
-},
-
-// Modify the updateFactCheck method
-async updateFactCheck(factCheckId: string, updates: Partial<FactCheck>): Promise<void> {
-  try {
-    const factCheckRef = doc(db, 'factChecks', factCheckId);
-    const factCheckDoc = await getDoc(factCheckRef);
-    
-    if (!factCheckDoc.exists()) {
-      throw new Error('Fact check not found');
-    }
-
-    const factCheck = factCheckDoc.data();
-    
-    // Handle karma for validation status changes
-    if (updates.moderatorValidation && factCheck.submittedBy) {
-      if (updates.moderatorValidation === 'VALIDATED_TRUE') {
-        await karmaService.addKarmaHistoryEntry(
-          factCheck.submittedBy,
-          'FACT_VALIDATED_TRUE',
-          factCheckId
-        );
-      } else if (updates.moderatorValidation === 'VALIDATED_FALSE') {
-        await karmaService.addKarmaHistoryEntry(
-          factCheck.submittedBy,
-          'FACT_VALIDATED_FALSE',
-          factCheckId
-        );
+      const factCheckRef = doc(db, 'factChecks', factCheckId);
+      const factCheckDoc = await getDoc(factCheckRef);
+      
+      if (!factCheckDoc.exists()) {
+        throw new Error('Fact check not found');
       }
+  
+      const factCheck = factCheckDoc.data();
+      
+      // Handle karma for validation status changes
+      if (updates.moderatorValidation && factCheck.submittedBy) {
+        const previousStatus = factCheck.moderatorValidation;
+        const newStatus = updates.moderatorValidation;
+  
+        // Only update karma if status actually changed
+        if (previousStatus !== newStatus) {
+          switch (newStatus) {
+            case 'VALIDATED_TRUE':
+              await karmaService.addKarmaHistoryEntry(
+                factCheck.submittedBy,
+                'FACT_VALIDATED_TRUE',
+                factCheckId
+              );
+              break;
+            case 'VALIDATED_FALSE':
+              await karmaService.addKarmaHistoryEntry(
+                factCheck.submittedBy,
+                'FACT_VALIDATED_FALSE',
+                factCheckId
+              );
+              break;
+            case 'VALIDATED_CONTROVERSIAL':
+              await karmaService.addKarmaHistoryEntry(
+                factCheck.submittedBy,
+                'FACT_VALIDATED_CONTROVERSIAL',
+                factCheckId
+              );
+              break;
+          }
+        }
+      }
+  
+      await updateDoc(factCheckRef, {
+        ...updates,
+        updatedAt: serverTimestamp()
+      });
+    } catch (error) {
+      console.error('Error updating fact check:', error);
+      throw error;
     }
-
-    await updateDoc(factCheckRef, {
-      ...updates,
-      updatedAt: serverTimestamp()
-    });
-  } catch (error) {
-    console.error('Error updating fact check:', error);
-    throw error;
-  }
-},
+  },
 
   async deleteFactCheck(factCheckId: string, episodeId: string): Promise<void> {
     try {
-      // Delete the fact check document
+      // Get the fact check data before deletion to access submittedBy
       const factCheckRef = doc(db, 'factChecks', factCheckId);
+      const factCheckDoc = await getDoc(factCheckRef);
+      
+      if (factCheckDoc.exists()) {
+        const factCheck = factCheckDoc.data();
+        
+        // Add negative karma for fact deletion
+        if (factCheck.submittedBy) {
+          await karmaService.addKarmaHistoryEntry(
+            factCheck.submittedBy,
+            'FACT_DELETED',
+            factCheckId
+          );
+        }
+      }
+  
+      // Delete the fact check document
       await deleteDoc(factCheckRef);
   
       // Update episode stats

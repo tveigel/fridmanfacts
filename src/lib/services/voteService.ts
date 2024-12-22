@@ -54,166 +54,173 @@ export const voteService = {
   async submitVote(
     factCheckId: string,
     userId: string,
-    newValue: number // -1, 0, or +1
+    newValue: number
   ): Promise<void> {
-    // We'll collect karma actions, then handle them AFTER the transaction.
     const ownerActions: KarmaAction[] = [];
     const voterActions: KarmaAction[] = [];
-
-    // We need to capture the authorId so we can reference it safely *after* the transaction
     let capturedAuthorId: string | null = null;
-
+  
     try {
       await runTransaction(db, async (transaction) => {
-        // 1. References
+        // 1. Get fact check data
         const factCheckRef = doc(db, 'factChecks', factCheckId);
-        const voteRef = doc(db, 'factChecks', factCheckId, 'votes', userId);
-
-        // 2. Get the factCheck
         const factCheckSnap = await transaction.get(factCheckRef);
-        if (!factCheckSnap.exists()) {
-          throw new Error('Fact check not found');
-        }
+        if (!factCheckSnap.exists()) throw new Error('Fact check not found');
+        
         const factCheckData = factCheckSnap.data();
-        const authorId = factCheckData.submittedBy as string;
-        capturedAuthorId = authorId; // <--- capture it for use outside
-
-        // We'll read validation status from factCheckData.status
-        let validationStatus = factCheckData.status || 'UNVALIDATED';
-        // If "VALIDATED_CONTROVERSIAL", treat as unvalidated for awarding voter karma:
-        if (validationStatus === 'VALIDATED_CONTROVERSIAL') {
-          validationStatus = 'UNVALIDATED';
-        }
-
-        let upvotes = factCheckData.upvotes || 0;
-        let downvotes = factCheckData.downvotes || 0;
-
-        // 3. Get the old vote from Firestore
+        const authorId = factCheckData.submittedBy;
+        capturedAuthorId = authorId;
+  
+        // 2. Get validation status
+        const validationStatus = factCheckData.moderatorValidation || factCheckData.status || 'UNVALIDATED';
+        
+        // 3. Get current vote
+        const voteRef = doc(db, 'factChecks', factCheckId, 'votes', userId);
         const oldVoteSnap = await transaction.get(voteRef);
-        const oldValue = oldVoteSnap.exists()
-          ? (oldVoteSnap.data().value as number)
-          : 0;
+        const oldValue = oldVoteSnap.exists() ? oldVoteSnap.data().value : 0;
+  
+        if (newValue === oldValue) return;
+  
 
-        // If newValue == oldValue, no change is needed.
-        if (newValue === oldValue) {
-          return; // early return, no changes
-        }
 
-        // 4. Remove the old vote from counters if oldValue != 0
-        if (oldValue === 1) {
-          upvotes = Math.max(0, upvotes - 1);
+        if (oldValue !== 0 && newValue !== 0 && oldValue !== newValue) {
+          // User is changing their vote from up to down or vice versa
           if (authorId !== userId) {
-            // Fact owner loses 'FACT_UPVOTED' => 'FACT_UPVOTE_REMOVED'
-            ownerActions.push('FACT_UPVOTE_REMOVED');
-            // Voter removing an upvote => 'UPVOTE_GIVEN_REMOVED'
-            voterActions.push('UPVOTE_GIVEN_REMOVED');
-          }
-        } else if (oldValue === -1) {
-          downvotes = Math.max(0, downvotes - 1);
-          if (authorId !== userId) {
-            // Fact owner loses 'FACT_DOWNVOTED' => 'FACT_DOWNVOTE_REMOVED'
-            ownerActions.push('FACT_DOWNVOTE_REMOVED');
-            // Voter removing a downvote
-            switch (factCheckData.status) {
-              case 'VALIDATED_FALSE':
-                voterActions.push('DOWNVOTE_CORRECT_REMOVED');
-                break;
-              case 'VALIDATED_TRUE':
+            if (oldValue === 1 && newValue === -1) {
+              // Changed from upvote to downvote
+              ownerActions.push('FACT_UPVOTE_REMOVED');
+              ownerActions.push('FACT_DOWNVOTED');
+              
+              if (validationStatus === 'VALIDATED_TRUE') {
+                voterActions.push('UPVOTE_GIVEN_REMOVED');
+                voterActions.push('DOWNVOTE_GIVEN_VALIDATED_TRUE');
+              } else if (validationStatus === 'VALIDATED_FALSE') {
+                voterActions.push('UPVOTE_GIVEN_VALIDATED_FALSE');
+                voterActions.push('DOWNVOTE_GIVEN_VALIDATED_FALSE');
+              }
+            } else if (oldValue === -1 && newValue === 1) {
+              // Changed from downvote to upvote
+              ownerActions.push('FACT_DOWNVOTE_REMOVED');
+              ownerActions.push('FACT_UPVOTED');
+              
+              if (validationStatus === 'VALIDATED_TRUE') {
                 voterActions.push('DOWNVOTE_VALIDATED_FACT_REMOVED');
-                break;
-              default:
-                voterActions.push('DOWNVOTE_GIVEN_REMOVED');
-                break;
+                voterActions.push('UPVOTE_GIVEN_VALIDATED_TRUE');
+              } else if (validationStatus === 'VALIDATED_FALSE') {
+                voterActions.push('DOWNVOTE_CORRECT_REMOVED');
+                voterActions.push('UPVOTE_GIVEN_VALIDATED_FALSE');
+              }
             }
           }
         }
 
-        // 5. Add the new vote (if newValue != 0)
-        if (newValue === 1) {
-          upvotes += 1;
-          if (authorId !== userId) {
-            ownerActions.push('FACT_UPVOTED');
-          }
-          // For the voter:
-          switch (factCheckData.status) {
-            case 'VALIDATED_TRUE':
-              voterActions.push('UPVOTE_GIVEN_VALIDATED_TRUE');
-              break;
-            case 'VALIDATED_FALSE':
-              voterActions.push('UPVOTE_GIVEN_VALIDATED_FALSE');
-              break;
-            default:
-              // UNVALIDATED or VALIDATED_CONTROVERSIAL
-              voterActions.push('UNVALIDATED_FACT_UPVOTED');
-          }
-        } else if (newValue === -1) {
-          downvotes += 1;
-          if (authorId !== userId) {
-            ownerActions.push('FACT_DOWNVOTED');
-          }
-          // For the voter:
-          switch (factCheckData.status) {
-            case 'VALIDATED_TRUE':
-              voterActions.push('DOWNVOTE_GIVEN_VALIDATED_TRUE');
-              break;
-            case 'VALIDATED_FALSE':
-              voterActions.push('DOWNVOTE_GIVEN_VALIDATED_FALSE');
-              break;
-            default:
-              // UNVALIDATED or VALIDATED_CONTROVERSIAL
-              voterActions.push('UNVALIDATED_FACT_DOWNVOTED');
+        // 4. Handle vote removal (when oldValue exists)
+        if (oldValue !== 0) {
+          if (oldValue === 1) {
+            if (authorId !== userId) {
+              ownerActions.push('FACT_UPVOTE_REMOVED');
+              
+              // Special karma handling for removing votes on validated facts
+              if (validationStatus === 'VALIDATED_TRUE') {
+                voterActions.push('UPVOTE_GIVEN_REMOVED');
+              } else if (validationStatus === 'VALIDATED_FALSE') {
+                voterActions.push('UPVOTE_GIVEN_VALIDATED_FALSE');
+              }
+            }
+          } else if (oldValue === -1) {
+            if (authorId !== userId) {
+              ownerActions.push('FACT_DOWNVOTE_REMOVED');
+              
+              // Special karma handling for removing downvotes
+              if (validationStatus === 'VALIDATED_TRUE') {
+                voterActions.push('DOWNVOTE_VALIDATED_FACT_REMOVED');
+              } else if (validationStatus === 'VALIDATED_FALSE') {
+                voterActions.push('DOWNVOTE_CORRECT_REMOVED');
+              }
+            }
           }
         }
-
-        // 6. Update or delete the vote doc
+  
+        // 5. Handle new vote
+        if (newValue !== 0) {
+          if (newValue === 1) {
+            if (authorId !== userId) {
+              ownerActions.push('FACT_OWNER_UPVOTED');
+              
+              // Different karma for validated vs unvalidated
+              if (validationStatus === 'VALIDATED_TRUE') {
+                voterActions.push('UPVOTE_GIVEN_VALIDATED_TRUE');
+              } else if (validationStatus === 'VALIDATED_FALSE') {
+                voterActions.push('UPVOTE_GIVEN_VALIDATED_FALSE');
+              } else {
+                voterActions.push('UNVALIDATED_FACT_UPVOTED');
+              }
+            }
+          } else if (newValue === -1) {
+            if (authorId !== userId) {
+              ownerActions.push('FACT_OWNER_DOWNVOTED');
+              
+              // Different karma for validated vs unvalidated
+              if (validationStatus === 'VALIDATED_TRUE') {
+                voterActions.push('DOWNVOTE_GIVEN_VALIDATED_TRUE');
+              } else if (validationStatus === 'VALIDATED_FALSE') {
+                voterActions.push('DOWNVOTE_GIVEN_VALIDATED_FALSE');
+              } else {
+                voterActions.push('UNVALIDATED_FACT_DOWNVOTED');
+              }
+            }
+          }
+        }
+  
+        // 6. Update vote document
         if (newValue === 0) {
-          // remove the vote entirely
           transaction.delete(voteRef);
         } else {
-          // upvote or downvote
           transaction.set(voteRef, {
             value: newValue,
-            timestamp: serverTimestamp(),
+            timestamp: serverTimestamp()
           });
         }
-
-        // 7. Update the factCheck counters
+  
+        // 7. Update fact check vote counts
+        let upvotes = factCheckData.upvotes || 0;
+        let downvotes = factCheckData.downvotes || 0;
+  
+        if (oldValue === 1) upvotes--;
+        else if (oldValue === -1) downvotes--;
+        if (newValue === 1) upvotes++;
+        else if (newValue === -1) downvotes++;
+  
         transaction.update(factCheckRef, {
           upvotes,
           downvotes,
-          updatedAt: serverTimestamp(),
+          updatedAt: serverTimestamp()
         });
       });
-
+  
       // 8. After transaction: apply karma actions
-      // IMPORTANT: we now use `capturedAuthorId` here instead of `factCheckData`.
       if (capturedAuthorId && ownerActions.length > 0) {
-        // Check if these owner actions truly apply:
-        const hasOwnerAction =
-          ownerActions.includes('FACT_UPVOTED') ||
-          ownerActions.includes('FACT_UPVOTE_REMOVED') ||
-          ownerActions.includes('FACT_DOWNVOTED') ||
-          ownerActions.includes('FACT_DOWNVOTE_REMOVED');
-
-        if (hasOwnerAction) {
-          for (const action of ownerActions) {
-            await karmaService.addKarmaHistoryEntry(
-              capturedAuthorId,
-              action,
-              factCheckId
-            );
-          }
+        for (const action of ownerActions) {
+          await karmaService.addKarmaHistoryEntry(
+            capturedAuthorId,
+            action,
+            factCheckId
+          );
         }
       }
-
+  
       if (voterActions.length > 0) {
         for (const action of voterActions) {
-          await karmaService.addKarmaHistoryEntry(userId, action, factCheckId);
+          await karmaService.addKarmaHistoryEntry(
+            userId,
+            action,
+            factCheckId
+          );
         }
       }
     } catch (error) {
       console.error('Error submitting vote:', error);
-      throw error; // Re-throw so caller sees the error
+      throw error;
     }
   },
 
