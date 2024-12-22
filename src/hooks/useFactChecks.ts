@@ -3,10 +3,12 @@
 // src/hooks/useFactChecks.ts
 import { useState, useEffect } from 'react';
 import { useAuth } from '../lib/context/AuthContext';
-import { factCheckService, voteService } from '../lib/services';
 import type { FactCheck } from '../lib/types/types';
 import { onSnapshot, collection, query, where } from 'firebase/firestore';
 import { db } from '../lib/firebase/firebaseConfig';
+import { voteService } from '../lib/services/voteService';
+import { factCheckService } from '../lib/services';
+
 
 export function useFactChecks({ episodeId }: { episodeId: string }) {
   const { user } = useAuth();
@@ -67,15 +69,13 @@ export function useFactChecks({ episodeId }: { episodeId: string }) {
     try {
       const previousValue = userVotes[factCheckId] || 0;
       
-      // Don't do anything if trying to set the same vote value
-      if (previousValue === value) {
-        value = 0; // Convert to unvote
-      }
+      // If clicking the same vote type, remove the vote
+      const newValue = value === previousValue ? 0 : value;
   
       // Optimistic update for user votes
       setUserVotes(prev => ({
         ...prev,
-        [factCheckId]: value === previousValue ? 0 : value
+        [factCheckId]: newValue
       }));
   
       // Optimistic update for fact check counts
@@ -84,17 +84,21 @@ export function useFactChecks({ episodeId }: { episodeId: string }) {
         Object.keys(updated).forEach(time => {
           updated[time] = updated[time].map(fc => {
             if (fc.id === factCheckId) {
-              const newUpvotes = Math.max(0, (fc.upvotes || 0) + 
-                (value === 1 ? 1 : 0) - 
-                (previousValue === 1 ? 1 : 0));
-              const newDownvotes = Math.max(0, (fc.downvotes || 0) + 
-                (value === -1 ? 1 : 0) - 
-                (previousValue === -1 ? 1 : 0));
-              
+              let newUpvotes = fc.upvotes || 0;
+              let newDownvotes = fc.downvotes || 0;
+  
+              // Remove previous vote
+              if (previousValue === 1) newUpvotes--;
+              if (previousValue === -1) newDownvotes--;
+  
+              // Add new vote
+              if (newValue === 1) newUpvotes++;
+              if (newValue === -1) newDownvotes++;
+  
               return {
                 ...fc,
-                upvotes: newUpvotes,
-                downvotes: newDownvotes
+                upvotes: Math.max(0, newUpvotes),
+                downvotes: Math.max(0, newDownvotes)
               };
             }
             return fc;
@@ -103,7 +107,7 @@ export function useFactChecks({ episodeId }: { episodeId: string }) {
         return updated;
       });
   
-      await voteService.submitVote(factCheckId, user.uid, value, previousValue);
+      await voteService.submitVote(factCheckId, user.uid, newValue, previousValue);
     } catch (error) {
       console.error('Error submitting vote:', error);
       // Revert optimistic updates on error

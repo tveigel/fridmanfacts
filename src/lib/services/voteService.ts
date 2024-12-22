@@ -1,20 +1,34 @@
-// lib/services/voteService.ts
-import { 
-  collection, 
-  doc, 
+// src/lib/services/voteService.ts
+
+import {
+  collection,
+  doc,
+  getDoc,
   getDocs,
-  setDoc, 
-  deleteDoc, 
+  setDoc,
+  deleteDoc,
   serverTimestamp,
-  updateDoc,
-  increment,
   runTransaction,
 } from 'firebase/firestore';
 import { db } from '../firebase/firebaseConfig';
-import { Vote, UserVotesMap } from '../types/types';
+import type { Vote, KarmaAction, UserVotesMap } from '../types/types';
 import { karmaService } from './karmaService';
 
+
+
 export const voteService = {
+  /**
+   * Submits (or updates/removes) a vote for the given factCheck by userId.
+   * `value` should be -1 (downvote), 0 (remove vote), or +1 (upvote).
+   *
+   * This function:
+   *   - loads the old vote from Firestore inside a transaction,
+   *   - removes the old vote from the fact's counters if needed,
+   *   - applies the new vote if needed,
+   *   - updates the doc,
+   *   - then after the transaction, applies Karma actions to fact owner & voter.
+   */
+
   async getUserVotes(userId: string, factCheckIds: string[]): Promise<UserVotesMap> {
     try {
       const votesMap: UserVotesMap = {};
@@ -36,139 +50,195 @@ export const voteService = {
       throw error;
     }
   },
-  
 
   async submitVote(
-    factCheckId: string, 
-    userId: string, 
-    value: number,
-    previousValue: number = 0
+    factCheckId: string,
+    userId: string,
+    newValue: number // -1, 0, or +1
   ): Promise<void> {
+    // We'll collect karma actions, then handle them AFTER the transaction.
+    const ownerActions: KarmaAction[] = [];
+    const voterActions: KarmaAction[] = [];
+
+    // We need to capture the authorId so we can reference it safely *after* the transaction
+    let capturedAuthorId: string | null = null;
+
     try {
-      const voteRef = doc(db, 'factChecks', factCheckId, 'votes', userId);
-      const factCheckRef = doc(db, 'factChecks', factCheckId);
-      let updatedFactCheck;
-  
       await runTransaction(db, async (transaction) => {
-        const factCheckDoc = await transaction.get(factCheckRef);
-        if (!factCheckDoc.exists()) {
+        // 1. References
+        const factCheckRef = doc(db, 'factChecks', factCheckId);
+        const voteRef = doc(db, 'factChecks', factCheckId, 'votes', userId);
+
+        // 2. Get the factCheck
+        const factCheckSnap = await transaction.get(factCheckRef);
+        if (!factCheckSnap.exists()) {
           throw new Error('Fact check not found');
         }
-  
-        const currentData = factCheckDoc.data();
-        let newUpvotes = Math.max(0, currentData.upvotes || 0);
-        let newDownvotes = Math.max(0, currentData.downvotes || 0);
-  
-        // Handle vote changes
-        if (previousValue === value) {
-          // Clicking same button again - remove vote
-          if (value === 1) newUpvotes = Math.max(0, newUpvotes - 1);
-          if (value === -1) newDownvotes = Math.max(0, newDownvotes - 1);
-          value = 0; // Reset value to indicate no vote
-        } else {
-          // Remove previous vote if exists
-          if (previousValue === 1) newUpvotes = Math.max(0, newUpvotes - 1);
-          if (previousValue === -1) newDownvotes = Math.max(0, newDownvotes - 1);
-          
-          // Add new vote
-          if (value === 1) newUpvotes += 1;
-          if (value === -1) newDownvotes += 1;
+        const factCheckData = factCheckSnap.data();
+        const authorId = factCheckData.submittedBy as string;
+        capturedAuthorId = authorId; // <--- capture it for use outside
+
+        // We'll read validation status from factCheckData.status
+        let validationStatus = factCheckData.status || 'UNVALIDATED';
+        // If "VALIDATED_CONTROVERSIAL", treat as unvalidated for awarding voter karma:
+        if (validationStatus === 'VALIDATED_CONTROVERSIAL') {
+          validationStatus = 'UNVALIDATED';
         }
-  
-        // Update or delete vote document
-        if (value === 0) {
+
+        let upvotes = factCheckData.upvotes || 0;
+        let downvotes = factCheckData.downvotes || 0;
+
+        // 3. Get the old vote from Firestore
+        const oldVoteSnap = await transaction.get(voteRef);
+        const oldValue = oldVoteSnap.exists()
+          ? (oldVoteSnap.data().value as number)
+          : 0;
+
+        // If newValue == oldValue, no change is needed.
+        if (newValue === oldValue) {
+          return; // early return, no changes
+        }
+
+        // 4. Remove the old vote from counters if oldValue != 0
+        if (oldValue === 1) {
+          upvotes = Math.max(0, upvotes - 1);
+          if (authorId !== userId) {
+            // Fact owner loses 'FACT_UPVOTED' => 'FACT_UPVOTE_REMOVED'
+            ownerActions.push('FACT_UPVOTE_REMOVED');
+            // Voter removing an upvote => 'UPVOTE_GIVEN_REMOVED'
+            voterActions.push('UPVOTE_GIVEN_REMOVED');
+          }
+        } else if (oldValue === -1) {
+          downvotes = Math.max(0, downvotes - 1);
+          if (authorId !== userId) {
+            // Fact owner loses 'FACT_DOWNVOTED' => 'FACT_DOWNVOTE_REMOVED'
+            ownerActions.push('FACT_DOWNVOTE_REMOVED');
+            // Voter removing a downvote
+            switch (factCheckData.status) {
+              case 'VALIDATED_FALSE':
+                voterActions.push('DOWNVOTE_CORRECT_REMOVED');
+                break;
+              case 'VALIDATED_TRUE':
+                voterActions.push('DOWNVOTE_VALIDATED_FACT_REMOVED');
+                break;
+              default:
+                voterActions.push('DOWNVOTE_GIVEN_REMOVED');
+                break;
+            }
+          }
+        }
+
+        // 5. Add the new vote (if newValue != 0)
+        if (newValue === 1) {
+          upvotes += 1;
+          if (authorId !== userId) {
+            ownerActions.push('FACT_UPVOTED');
+          }
+          // For the voter:
+          switch (factCheckData.status) {
+            case 'VALIDATED_TRUE':
+              voterActions.push('UPVOTE_GIVEN_VALIDATED_TRUE');
+              break;
+            case 'VALIDATED_FALSE':
+              voterActions.push('UPVOTE_GIVEN_VALIDATED_FALSE');
+              break;
+            default:
+              // UNVALIDATED or VALIDATED_CONTROVERSIAL
+              voterActions.push('UNVALIDATED_FACT_UPVOTED');
+          }
+        } else if (newValue === -1) {
+          downvotes += 1;
+          if (authorId !== userId) {
+            ownerActions.push('FACT_DOWNVOTED');
+          }
+          // For the voter:
+          switch (factCheckData.status) {
+            case 'VALIDATED_TRUE':
+              voterActions.push('DOWNVOTE_GIVEN_VALIDATED_TRUE');
+              break;
+            case 'VALIDATED_FALSE':
+              voterActions.push('DOWNVOTE_GIVEN_VALIDATED_FALSE');
+              break;
+            default:
+              // UNVALIDATED or VALIDATED_CONTROVERSIAL
+              voterActions.push('UNVALIDATED_FACT_DOWNVOTED');
+          }
+        }
+
+        // 6. Update or delete the vote doc
+        if (newValue === 0) {
+          // remove the vote entirely
           transaction.delete(voteRef);
         } else {
+          // upvote or downvote
           transaction.set(voteRef, {
-            value,
-            timestamp: serverTimestamp()
+            value: newValue,
+            timestamp: serverTimestamp(),
           });
         }
-  
-        const updates = {
-          upvotes: newUpvotes,
-          downvotes: newDownvotes,
-          updatedAt: serverTimestamp()
-        };
-  
-        transaction.update(factCheckRef, updates);
-        updatedFactCheck = { ...currentData, ...updates };
+
+        // 7. Update the factCheck counters
+        transaction.update(factCheckRef, {
+          upvotes,
+          downvotes,
+          updatedAt: serverTimestamp(),
+        });
       });
-  
-      // Handle karma updates after successful vote transaction
-      if (updatedFactCheck?.submittedBy && value !== previousValue) {
-        // Only give karma if not voting on own content
-        if (updatedFactCheck.submittedBy !== userId) {
-          try {
-            if (value === 1) {
-              await karmaService.addKarmaHistoryEntry(
-                updatedFactCheck.submittedBy,
-                'FACT_UPVOTED',
-                factCheckId
-              );
-            } else if (value === -1) {
-              await karmaService.addKarmaHistoryEntry(
-                updatedFactCheck.submittedBy,
-                'FACT_DOWNVOTED',
-                factCheckId
-              );
-            }
-          } catch (karmaError) {
-            console.error('Error updating recipient karma:', karmaError);
-          }
-        }
-  
-        // Add karma for giving votes
-        try {
-          if (value === 1) {
+
+      // 8. After transaction: apply karma actions
+      // IMPORTANT: we now use `capturedAuthorId` here instead of `factCheckData`.
+      if (capturedAuthorId && ownerActions.length > 0) {
+        // Check if these owner actions truly apply:
+        const hasOwnerAction =
+          ownerActions.includes('FACT_UPVOTED') ||
+          ownerActions.includes('FACT_UPVOTE_REMOVED') ||
+          ownerActions.includes('FACT_DOWNVOTED') ||
+          ownerActions.includes('FACT_DOWNVOTE_REMOVED');
+
+        if (hasOwnerAction) {
+          for (const action of ownerActions) {
             await karmaService.addKarmaHistoryEntry(
-              userId,
-              'UPVOTE_GIVEN',
+              capturedAuthorId,
+              action,
               factCheckId
             );
-          } else if (value === -1 && updatedFactCheck.moderatorValidation) {
-            const karmaAction = updatedFactCheck.moderatorValidation === 'VALIDATED_TRUE' 
-              ? 'DOWNVOTE_VALIDATED_FACT' 
-              : updatedFactCheck.moderatorValidation === 'VALIDATED_FALSE'
-                ? 'DOWNVOTE_CORRECT'
-                : null;
-  
-            if (karmaAction) {
-              await karmaService.addKarmaHistoryEntry(
-                userId,
-                karmaAction,
-                factCheckId
-              );
-            }
           }
-        } catch (karmaError) {
-          console.error('Error updating voter karma:', karmaError);
+        }
+      }
+
+      if (voterActions.length > 0) {
+        for (const action of voterActions) {
+          await karmaService.addKarmaHistoryEntry(userId, action, factCheckId);
         }
       }
     } catch (error) {
       console.error('Error submitting vote:', error);
-      throw error;
+      throw error; // Re-throw so caller sees the error
     }
   },
 
+
+  /**
+   * Returns the total upvotes and downvotes for a given factCheckId.
+   */
   async getVoteCounts(factCheckId: string): Promise<{ upvotes: number; downvotes: number }> {
     try {
       const votesRef = collection(db, 'factChecks', factCheckId, 'votes');
       const votesSnapshot = await getDocs(votesRef);
-      
+
       let upvotes = 0;
       let downvotes = 0;
-      
-      votesSnapshot.forEach((doc) => {
-        const value = doc.data().value;
-        if (value === 1) upvotes++;
-        else if (value === -1) downvotes++;
+
+      votesSnapshot.forEach((docSnap) => {
+        const val = docSnap.data().value;
+        if (val === 1) upvotes++;
+        else if (val === -1) downvotes++;
       });
-      
+
       return { upvotes, downvotes };
     } catch (error) {
       console.error('Error calculating vote counts:', error);
       throw error;
     }
-  }
+  },
 };

@@ -46,7 +46,7 @@ export type CommentVotesMap = {
   [commentId: string]: number;
 };
 
-// lib/types/types.ts
+
 export type NotificationType = 'COMMENT_REPLY' | 'VOTE_MILESTONE' | 'MODERATION' | 'FACT_CHECK_UPDATE';
 
 export type Notification = {
@@ -61,19 +61,44 @@ export type Notification = {
 };
 
 
-// Karma action types
 export type KarmaAction = 
-  | 'SUBMIT_FACT'
-  | 'FACT_VALIDATED_TRUE'
-  | 'FACT_VALIDATED_FALSE'
-  | 'FACT_UPVOTED'
-  | 'FACT_DOWNVOTED'
-  | 'SUBMIT_COMMENT'
-  | 'COMMENT_UPVOTED'
-  | 'COMMENT_DOWNVOTED'
-  | 'UPVOTE_GIVEN'
-  | 'DOWNVOTE_CORRECT'
-  | 'DOWNVOTE_VALIDATED_FACT';
+ // Fact submission and validation
+ | 'SUBMIT_FACT'
+ | 'FACT_VALIDATED_TRUE'
+ | 'FACT_VALIDATED_FALSE'
+ | 'FACT_VALIDATED_CONTROVERSIAL'
+ | 'FACT_DELETED'
+ 
+ // Voting on facts
+ | 'FACT_UPVOTED'
+ | 'FACT_DOWNVOTED'
+ | 'FACT_UPVOTE_REMOVED'
+ | 'FACT_DOWNVOTE_REMOVED'
+ 
+ // Voting on unvalidated facts
+ | 'UNVALIDATED_FACT_UPVOTED'
+ | 'UNVALIDATED_FACT_DOWNVOTED'
+ 
+ // Impact on fact owner
+ | 'FACT_OWNER_UPVOTED'
+ | 'FACT_OWNER_DOWNVOTED'
+ 
+ // Voting behaviors
+ | 'UPVOTE_GIVEN_VALIDATED_FALSE'
+ | 'DOWNVOTE_GIVEN_VALIDATED_TRUE'
+ | 'UPVOTE_GIVEN_VALIDATED_TRUE'
+ | 'DOWNVOTE_GIVEN_VALIDATED_FALSE'
+ 
+ // Removed votes
+ | 'UPVOTE_GIVEN_REMOVED'
+ | 'DOWNVOTE_GIVEN_REMOVED'
+ | 'DOWNVOTE_CORRECT_REMOVED'
+ | 'DOWNVOTE_VALIDATED_FACT_REMOVED'
+ 
+ // Comments
+ | 'SUBMIT_COMMENT'
+ | 'COMMENT_UPVOTED'
+ | 'COMMENT_DOWNVOTED';
 
 // Karma history entry
 export type KarmaHistoryEntry = {

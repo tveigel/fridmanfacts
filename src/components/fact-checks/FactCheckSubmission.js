@@ -61,20 +61,27 @@ export default function FactCheckSubmission({
         downvotes: 0
       };
   
-      await factCheckService.createFactCheck(factCheckData);
+      // Create the fact check and capture the response
+      const factCheckId = await factCheckService.createFactCheck(factCheckData);
       
-      // If we get here, the operation was successful
-      onClose();
+      // If we got an ID back, consider it a success regardless of karma operations
+      if (factCheckId) {
+        onClose();
+        return;
+      }
+      
+      setError('Failed to create fact check. Please try again.');
     } catch (error) {
       console.error('Error submitting fact check:', error);
       
-      // Check if the fact check might have been created despite the error
-      // This helps prevent duplicate submissions
-      if (error.message?.includes('permission-denied')) {
-        setError('Permission denied. Please try logging out and back in.');
-      } else {
-        setError(error.message || 'Failed to submit fact check. Please try again.');
+      // Don't show permission errors to the user if the fact check was actually created
+      if (error.code === 'permission-denied' && error.message?.includes('karma')) {
+        // Silently handle karma-related permission errors
+        onClose();
+        return;
       }
+      
+      setError(error.message || 'Failed to submit fact check. Please try again.');
     } finally {
       setIsSubmitting(false);
     }
