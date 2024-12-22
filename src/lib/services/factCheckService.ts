@@ -43,98 +43,105 @@ export const factCheckService = {
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp()
       };
-  
+
       // Add the fact check document
       const factCheckRef = await addDoc(collection(db, 'factChecks'), fullFactCheckData);
-      
-      try {
-        // Update episode stats - wrapped in separate try/catch to not fail the whole operation
-        const episodeRef = doc(db, 'episodes', factCheckData.episodeId);
-        await updateDoc(episodeRef, {
-          factCheckCount: increment(1),
-          updatedAt: serverTimestamp()
-        });
-      } catch (statsError) {
-        console.warn('Non-critical error updating episode stats:', statsError);
-        // Don't throw here as the main operation succeeded
-      }
-  
-      try {
-        // Add karma - wrapped in separate try/catch
-        await karmaService.addKarmaHistoryEntry(
-          factCheckData.submittedBy,
-          'SUBMIT_FACT',
-          factCheckRef.id
-        );
-      } catch (karmaError) {
-        console.warn('Non-critical error updating karma:', karmaError);
-        // Don't throw here as the main operation succeeded
-      }
-  
+
+      // Update episode stats
+      const episodeRef = doc(db, 'episodes', factCheckData.episodeId);
+      await updateDoc(episodeRef, {
+        factCheckCount: increment(1),
+        updatedAt: serverTimestamp()
+      });
+
+    // Add karma for submitting a fact check
+    await karmaService.addKarmaHistoryEntry(
+      factCheckData.submittedBy,
+      'SUBMIT_FACT',
+      factCheckRef.id
+    );
+
       return factCheckRef.id;
     } catch (error) {
       console.error('Error creating fact check:', error);
-      if (error.code === 'permission-denied') {
-        throw new Error('You do not have permission to create fact checks. Please ensure you are logged in.');
-      }
       throw error;
     }
   },
 
-
-async updateFactCheck(factCheckId: string, updates: Partial<FactCheck>): Promise<void> {
-  try {
-    const factCheckRef = doc(db, 'factChecks', factCheckId);
-    const factCheckDoc = await getDoc(factCheckRef);
-    
-    if (!factCheckDoc.exists()) {
-      throw new Error('Fact check not found');
-    }
-
-    const factCheck = factCheckDoc.data();
-    
-    // Handle karma for validation status changes
-    if (updates.moderatorValidation && factCheck.submittedBy) {
-      switch (updates.moderatorValidation) {
-        case 'VALIDATED_TRUE':
-          await karmaService.addKarmaHistoryEntry(
-            factCheck.submittedBy,
-            'FACT_VALIDATED_TRUE',
-            factCheckId
-          );
-          break;
-        case 'VALIDATED_FALSE':
-          await karmaService.addKarmaHistoryEntry(
-            factCheck.submittedBy,
-            'FACT_VALIDATED_FALSE',
-            factCheckId
-          );
-          break;
-        case 'VALIDATED_CONTROVERSIAL':
-          // Add new karma action for controversial
-          await karmaService.addKarmaHistoryEntry(
-            factCheck.submittedBy,
-            'FACT_VALIDATED_CONTROVERSIAL',
-            factCheckId
-          );
-          break;
+  async updateFactCheck(factCheckId: string, updates: Partial<FactCheck>): Promise<void> {
+    try {
+      const factCheckRef = doc(db, 'factChecks', factCheckId);
+      const factCheckDoc = await getDoc(factCheckRef);
+      
+      if (!factCheckDoc.exists()) {
+        throw new Error('Fact check not found');
       }
+  
+      const factCheck = factCheckDoc.data();
+      
+      // Handle karma for validation status changes
+      if (updates.moderatorValidation && factCheck.submittedBy) {
+        const previousStatus = factCheck.moderatorValidation;
+        const newStatus = updates.moderatorValidation;
+  
+        // Only update karma if status actually changed
+        if (previousStatus !== newStatus) {
+          switch (newStatus) {
+            case 'VALIDATED_TRUE':
+              await karmaService.addKarmaHistoryEntry(
+                factCheck.submittedBy,
+                'FACT_VALIDATED_TRUE',
+                factCheckId
+              );
+              break;
+            case 'VALIDATED_FALSE':
+              await karmaService.addKarmaHistoryEntry(
+                factCheck.submittedBy,
+                'FACT_VALIDATED_FALSE',
+                factCheckId
+              );
+              break;
+            case 'VALIDATED_CONTROVERSIAL':
+              await karmaService.addKarmaHistoryEntry(
+                factCheck.submittedBy,
+                'FACT_VALIDATED_CONTROVERSIAL',
+                factCheckId
+              );
+              break;
+          }
+        }
+      }
+  
+      await updateDoc(factCheckRef, {
+        ...updates,
+        updatedAt: serverTimestamp()
+      });
+    } catch (error) {
+      console.error('Error updating fact check:', error);
+      throw error;
     }
-
-    await updateDoc(factCheckRef, {
-      ...updates,
-      updatedAt: serverTimestamp()
-    });
-  } catch (error) {
-    console.error('Error updating fact check:', error);
-    throw error;
-  }
-},
+  },
 
   async deleteFactCheck(factCheckId: string, episodeId: string): Promise<void> {
     try {
-      // Delete the fact check document
+      // Get the fact check data before deletion to access submittedBy
       const factCheckRef = doc(db, 'factChecks', factCheckId);
+      const factCheckDoc = await getDoc(factCheckRef);
+      
+      if (factCheckDoc.exists()) {
+        const factCheck = factCheckDoc.data();
+        
+        // Add negative karma for fact deletion
+        if (factCheck.submittedBy) {
+          await karmaService.addKarmaHistoryEntry(
+            factCheck.submittedBy,
+            'FACT_DELETED',
+            factCheckId
+          );
+        }
+      }
+  
+      // Delete the fact check document
       await deleteDoc(factCheckRef);
   
       // Update episode stats
