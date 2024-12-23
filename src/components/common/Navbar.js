@@ -1,3 +1,5 @@
+// src/components/common/Navbar.js
+
 "use client";
 
 import React, { useState, useEffect } from 'react';
@@ -13,35 +15,39 @@ import { useFactChecks } from '../../hooks/useFactChecks';
 import { useKarma } from '../../hooks/useKarma';
 import { KARMA_LEVELS, getKarmaLevel } from '../../lib/utils/karmaConstants';
 import UserLevelDisplay from '../fact-checks/core/UserLevelDisplay';
+import { doc, getDoc } from 'firebase/firestore';
+import { db } from '../../lib/firebase/firebaseConfig';
+
 
 // Separate component for display user ID with level
-export const UserNameWithLevel = ({ userId, displayName = null, className = "" }) => {
+export const UserNameWithLevel = ({ userId, username, className = "" }) => {
   const { karma } = useKarma();
   const currentLevel = getKarmaLevel(karma || 0);
   const levelInfo = KARMA_LEVELS[currentLevel];
-  const displayText = displayName || userId;
+  const displayText = username || userId;
   
   return (
-    <div className={`flex items-center gap-2 ${className}`}>
-      <span>{displayText}</span>
-      <span className={`text-xs px-2 py-0.5 rounded-full ${levelInfo.bgColor} ${levelInfo.color}`}>
-        {levelInfo.label}
-      </span>
-    </div>
+    <Link href={`/profile/${username}`}>  {/* Changed from userId to username */}
+      <div className={`flex items-center gap-2 ${className} cursor-pointer hover:opacity-80`}>
+        <span>{displayText}</span>
+        <span className={`text-xs px-2 py-0.5 rounded-full ${levelInfo.bgColor} ${levelInfo.color}`}>
+          {levelInfo.label}
+        </span>
+      </div>
+    </Link>
   );
 };
-
-
 
 export default function Navbar() {
   const [searchQuery, setSearchQuery] = useState('');
   const [showLoginModal, setShowLoginModal] = useState(false);
+  const [userData, setUserData] = useState(null);
   const [showSettings, setShowSettings] = useState(false);
   const [isVisible, setIsVisible] = useState(true);
   const [lastScrollY, setLastScrollY] = useState(0);
   const { allFactChecks } = useFactChecks({ episodeId: null });
   const router = useRouter();
-  const { user, logout } = useAuth();
+  const { user, logout, loading } = useAuth();
   const { karma } = useKarma();
 
   // Get user's current level info
@@ -53,22 +59,35 @@ export default function Navbar() {
         const currentScrollY = window.scrollY;
         const scrollingDown = currentScrollY > lastScrollY;
         const scrollDifference = Math.abs(currentScrollY - lastScrollY);
-
+  
         if (currentScrollY < 100 || (!scrollingDown && scrollDifference > 40)) {
           setIsVisible(true);
         } else if (scrollingDown && currentScrollY > 100 && scrollDifference > 30) {
           setIsVisible(false);
         }
-
+  
         setLastScrollY(currentScrollY);
       }
     };
-
+  
     if (typeof window !== 'undefined') {
       window.addEventListener('scroll', controlNavbar);
       return () => window.removeEventListener('scroll', controlNavbar);
     }
   }, [lastScrollY]);
+  
+  // Second useEffect for fetching username
+  useEffect(() => {
+    if (user) {
+      const fetchUsername = async () => {
+        const userDoc = await getDoc(doc(db, "users", user.uid));
+        if (userDoc.exists()) {
+          setUserData(userDoc.data());
+        }
+      };
+      fetchUsername();
+    }
+  }, [user]);
 
   const handleSearch = (e) => {
     e.preventDefault();
@@ -84,6 +103,7 @@ export default function Navbar() {
       }`}>
         <div className="max-w-[1920px] mx-auto pl-0 pr-6">
           <div className="flex items-center justify-between h-20">
+            {/* Left side */}
             <div className="flex items-center gap-10">
               <Logo className="pl-0" />
               <div className="hidden md:flex items-center gap-8">
@@ -99,6 +119,7 @@ export default function Navbar() {
               </div>
             </div>
 
+            {/* Right side */}
             <div className="flex items-center gap-4">
               <form onSubmit={handleSearch} className="relative hidden md:block">
                 <input
@@ -125,37 +146,31 @@ export default function Navbar() {
                   <Settings size={20} className="text-white" />
                 </button>
 
-                {user ? (
+                {loading ? (
+                  <div className="w-8 h-8 rounded-full bg-white/10 animate-pulse"></div>
+                ) : user ? (
                   <>
-                    {/* Notifications */}
                     <NotificationsIcon />
                     
-                    {/* Updated Karma Display with Emoji */}
-                    <div className="flex items-center bg-white/10 hover:bg-white/20 rounded-lg px-3 py-2 transition-colors">
-                      <div className="flex items-center" title="Your Karma Points">
-                        <Star className="text-yellow-400 mr-1.5" size={18} />
-                        <span className="text-yellow-400 mr-1">Karma</span>
-                        <span className="text-lg font-semibold text-yellow-400">{karma || 0}</span>
-                        <UserLevelDisplay level={currentLevel} />
+                    {/* User Profile Section */}
+                    <div className="flex items-center gap-4">
+                      <div className="flex items-center bg-white/10 hover:bg-white/20 rounded-lg px-3 py-2 transition-colors">
+                        <div className="flex items-center" title="Your Karma Points">
+                          <Star className="text-yellow-400 mr-1.5" size={18} />
+                          <span className="text-yellow-400 mr-1">Karma</span>
+                          <span className="text-lg font-semibold text-yellow-400">{karma || 0}</span>
+                          <UserLevelDisplay level={currentLevel} />
+                        </div>
                       </div>
+                      
+                      {/* Username Display */}
+                      <UserNameWithLevel 
+                      userId={user.uid}
+                      username={userData?.username}
+                      className="text-white"
+                    />
                     </div>
 
-                    <Link 
-                      href={`/profile/${user.uid}`} 
-                      className="flex items-center gap-2 hover:text-gray-200"
-                    >
-                      <div className="w-8 h-8 rounded-full bg-white/10 flex items-center justify-center">
-                        <span className="text-sm text-white">
-                          {(user.displayName || user.email || 'U')[0].toUpperCase()}
-                        </span>
-                      </div>
-                      <span className="hidden md:inline">
-                        <UserNameWithLevel 
-                          userId={user.uid} 
-                          displayName={user.displayName || user.email} 
-                        />
-                      </span>
-                    </Link>
                     <button 
                       onClick={logout}
                       className="px-5 py-2.5 text-base bg-white text-black rounded hover:bg-gray-200"
@@ -177,7 +192,7 @@ export default function Navbar() {
         </div>
       </nav>
 
-      {/* Portaled components outside of nav */}
+      {/* Portaled components */}
       <div className="portal-container">
         <SettingsMenu
           isOpen={showSettings}

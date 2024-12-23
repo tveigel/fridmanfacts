@@ -7,7 +7,7 @@ import ProfileHeader from './ProfileHeader';
 import ProfileActivity from './ProfileActivity';
 import KarmaAchievements from '../karma/KarmaAchievements';
 
-export default function UserProfile({ userId }) {
+export default function UserProfile({ username }) {  // Changed from userId to username
   const { user } = useAuth();
   const [profileData, setProfileData] = useState(null);
   const [activities, setActivities] = useState({
@@ -19,7 +19,7 @@ export default function UserProfile({ userId }) {
 
   useEffect(() => {
     async function fetchProfileData() {
-      if (!userId) {
+      if (!username) {
         setLoading(false);
         return;
       }
@@ -28,17 +28,26 @@ export default function UserProfile({ userId }) {
         setLoading(true);
         setError(null);
 
-        // Fetch user profile data
-        const userRef = doc(db, 'users', userId);
-        const userDoc = await getDoc(userRef);
+        // First, get the userId by querying users collection with username
+        const usersQuery = query(
+          collection(db, 'users'),
+          where('username', '==', username)
+        );
+        const userSnapshot = await getDocs(usersQuery);
         
-        const profileData = userDoc.exists() 
-          ? { id: userDoc.id, ...userDoc.data() }
-          : { id: userId, displayName: 'Anonymous User', email: null, photoURL: null };
+        if (userSnapshot.empty) {
+          setError('User not found');
+          setLoading(false);
+          return;
+        }
 
+        // Get the first (and should be only) user document
+        const userDoc = userSnapshot.docs[0];
+        const userId = userDoc.id;
+        const profileData = { id: userDoc.id, ...userDoc.data() };
         setProfileData(profileData);
 
-        // First try with orderBy
+        // Fetch fact checks using userId
         try {
           const factChecksQuery = query(
             collection(db, 'factChecks'),
@@ -77,7 +86,7 @@ export default function UserProfile({ userId }) {
           }
         }
 
-        // Fetch comments
+        // Fetch comments using userId
         try {
           const commentsQuery = query(
             collection(db, 'comments'),
@@ -116,9 +125,8 @@ export default function UserProfile({ userId }) {
     }
 
     fetchProfileData();
-  }, [userId]);
+  }, [username]);  // Changed dependency from userId to username
 
-  // Show a different error message for index-related errors
   if (error) {
     return (
       <div className="bg-red-50 p-4 rounded-lg">
@@ -145,7 +153,7 @@ export default function UserProfile({ userId }) {
     return <ProfileSkeleton />;
   }
 
-  const isOwnProfile = user?.uid === userId;
+  const isOwnProfile = user?.uid === profileData.id;
 
   return (
     <div className="space-y-8">
@@ -156,7 +164,6 @@ export default function UserProfile({ userId }) {
         commentCount={activities.comments.length}
       />
       
-      {/* Add Karma Achievements section */}
       {isOwnProfile && <KarmaAchievements />}
       
       <ProfileActivity activities={activities} />

@@ -9,9 +9,10 @@ interface User {
   email: string;
   role: 'user' | 'moderator' | 'admin';
   displayName: string;
+  username: string;  // Add this field
   photoURL?: string;
   preferences: {
-    validationThreshold: number; // Default: 10
+    validationThreshold: number;
     showControversialFlags: boolean;
     showUnvalidatedFlags: boolean;
   };

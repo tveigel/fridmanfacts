@@ -1,59 +1,42 @@
-#!/usr/bin/env python3
 import os
 import pyperclip
 
-# List of files you want to fetch
-files_to_fetch = [
-    # Core Karma Files
-    "src/lib/services/karmaService.ts",
-    "src/hooks/useKarma.ts",
-    "src/lib/utils/karmaConstants.js",
-
-    # Voting-Related Files
-    "src/lib/services/voteService.ts",
-    "src/lib/utils/votingUtils.js",
-    "src/components/fact-checks/core/FactCheckVoting.js",
-    "src/components/comments/CommentVoting.js",
-
-    # Type Definitions
-    "src/lib/types/core-types.ts",
-    "src/lib/types/types.ts",
-
-    # UI Components
-    "src/components/karma/KarmaDisplay.js",
-    "src/components/karma/KarmaAchievements.js",
-    "src/components/karma/KarmaHistory.js",
-    "src/components/common/Navbar.js",
+# List of files to copy
+files_to_copy = [
+    "src/components/auth/Login.js",
+    "src/components/auth/LoginModal.js",
+    "src/lib/context/AuthContext.tsx",
+    "src/lib/firebase/firebaseConfig.js",
+    "src/lib/firebase/adminUtils.js",
+    "src/lib/firebase/types.ts",
+    "src/lib/services/roleService.js",
+    "src/lib/services/notificationService.ts",
+    "src/hooks/useRoles.ts",
+    "src/hooks/useProtectedAction.ts",
+    "firestore.rules"
 ]
 
-def main():
-    all_content = []
+# Base directory of your project
+base_dir = "C:/Users/timveigel/Documents/fridmanfacts/crowdcheck"
 
-    # Root of your project (adjust if necessary)
-    project_root = "."
+# Initialize clipboard content
+clipboard_content = ""
 
-    for relative_path in files_to_fetch:
-        full_path = os.path.join(project_root, relative_path)
-        
-        if not os.path.exists(full_path):
-            # You may want to log or raise an error if the file doesn't exist
-            print(f"[WARNING] File not found: {full_path}")
-            continue
-        
-        # Read the file content
-        with open(full_path, "r", encoding="utf-8") as f:
-            file_content = f.read()
-        
-        # Add a header for clarity
-        header = f"\n{'='*80}\nFile: {relative_path}\n{'='*80}\n"
-        all_content.append(header + file_content)
+for relative_path in files_to_copy:
+    file_path = os.path.join(base_dir, relative_path)
     
-    # Join everything into one big string
-    final_output = "\n".join(all_content)
+    if os.path.exists(file_path):
+        with open(file_path, 'r', encoding='utf-8') as file:
+            file_content = file.read()
+            
+            # Add file name and content to clipboard content
+            clipboard_content += f"\n--- {relative_path} ---\n"
+            clipboard_content += file_content
+            clipboard_content += "\n--- EOF ---\n"
+    else:
+        clipboard_content += f"\n--- {relative_path} ---\nFile not found.\n--- EOF ---\n"
 
-    # Copy to clipboard
-    pyperclip.copy(final_output)
-    print("All requested files have been copied to your clipboard.")
+# Copy all content to clipboard
+pyperclip.copy(clipboard_content)
 
-if __name__ == "__main__":
-    main()
+print("All specified files have been copied to the clipboard.")

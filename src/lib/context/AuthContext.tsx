@@ -13,13 +13,47 @@ import {
   sendEmailVerification,
   User
 } from "firebase/auth";
-import { auth } from "../firebase/firebaseConfig";
+import { doc, setDoc, getDoc, serverTimestamp } from "firebase/firestore";
+import { auth, db } from "../firebase/firebaseConfig";
+import { generateUsername } from "../utils/userUtils"; // We'll create this
 import { AuthContextType } from "../types/component-types";
+
+
 
 const AuthContext = createContext<AuthContextType | null>(null);
 
-interface AuthProviderProps {
-  children: ReactNode;
+// Helper function to create/update user document
+async function createOrUpdateUserDocument(user: User, username?: string) {
+  const userRef = doc(db, "users", user.uid);
+  const userSnap = await getDoc(userRef);
+
+  if (!userSnap.exists()) {
+    // Create new user document
+    const newUsername = username || await generateUsername();
+    await setDoc(userRef, {
+      uid: user.uid,
+      email: user.email,
+      displayName: user.displayName || newUsername,
+      username: newUsername,
+      photoURL: user.photoURL,
+      role: 'user',
+      preferences: {
+        validationThreshold: 10,
+        showControversialFlags: true,
+        showUnvalidatedFlags: true
+      },
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp()
+    });
+  } else {
+    // Update existing user document
+    await setDoc(userRef, {
+      updatedAt: serverTimestamp(),
+      email: user.email,
+      displayName: user.displayName,
+      photoURL: user.photoURL
+    }, { merge: true });
+  }
 }
 
 export const AuthProvider = ({ children }: AuthProviderProps): JSX.Element => {
@@ -27,8 +61,11 @@ export const AuthProvider = ({ children }: AuthProviderProps): JSX.Element => {
   const [loading, setLoading] = useState<boolean>(true);
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (user) => {
+    const unsubscribe = onAuthStateChanged(auth, async (user) => {
       setUser(user);
+      if (user) {
+        await createOrUpdateUserDocument(user);
+      }
       setLoading(false);
     });
 
@@ -38,7 +75,8 @@ export const AuthProvider = ({ children }: AuthProviderProps): JSX.Element => {
   const login = async (): Promise<void> => {
     const provider = new GoogleAuthProvider();
     try {
-      await signInWithPopup(auth, provider);
+      const result = await signInWithPopup(auth, provider);
+      await createOrUpdateUserDocument(result.user);
     } catch (error) {
       throw error;
     }
@@ -50,8 +88,10 @@ export const AuthProvider = ({ children }: AuthProviderProps): JSX.Element => {
       
       if (!userCredential.user.emailVerified) {
         await signOut(auth);
-        throw new Error("Please verify your email before logging in. Check your inbox for the verification link.");
+        throw new Error("Please verify your email before logging in.");
       }
+      
+      await createOrUpdateUserDocument(userCredential.user);
     } catch (error: any) {
       if (error.code === 'auth/wrong-password' || error.code === 'auth/user-not-found') {
         throw new Error("Invalid email or password");
