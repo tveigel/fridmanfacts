@@ -57,6 +57,9 @@ export interface AuthContextType {
   signUpWithEmail: (email: string, password: string) => Promise<string>;
   logout: () => Promise<void>;
   loading: boolean;
+  needsUsername: boolean;
+  finalizeUserRegistration: (username: string) => Promise<void>;
+  resendVerificationEmail: () => Promise<string>;
 }
 
 export interface LoginModalContextType {

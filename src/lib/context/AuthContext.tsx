@@ -15,7 +15,7 @@ import {
 } from "firebase/auth";
 import { doc, setDoc, getDoc, serverTimestamp } from "firebase/firestore";
 import { auth, db } from "../firebase/firebaseConfig";
-import { generateUsername } from "../utils/userUtils"; // We'll create this
+import { generateUsername } from "../utils/userUtils"; 
 import { AuthContextType } from "../types/component-types";
 
 
@@ -28,13 +28,51 @@ async function createOrUpdateUserDocument(user: User, username?: string) {
   const userSnap = await getDoc(userRef);
 
   if (!userSnap.exists()) {
-    // Create new user document
-    const newUsername = username || await generateUsername();
+    // Don't create the user document yet - we'll do it after username confirmation
+    return false;
+  } else {
+    // Update existing user document
+    await setDoc(userRef, {
+      updatedAt: serverTimestamp(),
+      email: user.email,
+      displayName: user.displayName,
+      photoURL: user.photoURL
+    }, { merge: true });
+    return true;
+  }
+}
+
+export const AuthProvider = ({ children }: AuthProviderProps): JSX.Element => {
+  const [user, setUser] = useState<User | null>(null);
+  const [loading, setLoading] = useState<boolean>(true);
+  const [needsUsername, setNeedsUsername] = useState<boolean>(false);
+
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, async (user) => {
+      setUser(user);
+      if (user) {
+        const exists = await createOrUpdateUserDocument(user);
+        if (!exists) {
+          setNeedsUsername(true);
+        }
+      }
+      setLoading(false);
+    });
+
+    return () => unsubscribe();
+  }, []);
+
+  
+
+  const finalizeUserRegistration = async (username: string) => {
+    if (!user) return;
+    
+    const userRef = doc(db, "users", user.uid);
     await setDoc(userRef, {
       uid: user.uid,
       email: user.email,
-      displayName: user.displayName || newUsername,
-      username: newUsername,
+      displayName: user.displayName || username,
+      username: username,
       photoURL: user.photoURL,
       role: 'user',
       preferences: {
@@ -45,32 +83,9 @@ async function createOrUpdateUserDocument(user: User, username?: string) {
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp()
     });
-  } else {
-    // Update existing user document
-    await setDoc(userRef, {
-      updatedAt: serverTimestamp(),
-      email: user.email,
-      displayName: user.displayName,
-      photoURL: user.photoURL
-    }, { merge: true });
-  }
-}
-
-export const AuthProvider = ({ children }: AuthProviderProps): JSX.Element => {
-  const [user, setUser] = useState<User | null>(null);
-  const [loading, setLoading] = useState<boolean>(true);
-
-  useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, async (user) => {
-      setUser(user);
-      if (user) {
-        await createOrUpdateUserDocument(user);
-      }
-      setLoading(false);
-    });
-
-    return () => unsubscribe();
-  }, []);
+    
+    setNeedsUsername(false);
+  };
 
   const login = async (): Promise<void> => {
     const provider = new GoogleAuthProvider();
@@ -99,6 +114,22 @@ export const AuthProvider = ({ children }: AuthProviderProps): JSX.Element => {
       throw error;
     }
   };
+
+  const resendVerificationEmail = async () => {
+    if (!auth.currentUser) {
+      throw new Error("No user logged in");
+    }
+    try {
+      await sendEmailVerification(auth.currentUser);
+      return "Verification email sent successfully. Please check your inbox.";
+    } catch (error: any) {
+      if (error.code === 'auth/too-many-requests') {
+        throw new Error("Too many requests. Please wait a few minutes before trying again.");
+      }
+      throw new Error("Failed to send verification email. Please try again later.");
+    }
+  };
+
 
   const signUpWithEmail = async (email: string, password: string): Promise<string> => {
     try {
@@ -142,7 +173,10 @@ export const AuthProvider = ({ children }: AuthProviderProps): JSX.Element => {
     loginWithEmail,
     signUpWithEmail,
     logout,
-    loading
+    loading,
+    needsUsername,
+    finalizeUserRegistration,
+    resendVerificationEmail
   };
 
   return (
