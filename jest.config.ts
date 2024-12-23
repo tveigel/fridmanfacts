@@ -5,12 +5,12 @@ import nextJest from 'next/jest'
 
 
 const createJestConfig = nextJest({
-  // Your existing config is good, just adding type safety
+
   dir: './',
 })
 
 const customJestConfig = {
-  setupFilesAfterEnv: ['<rootDir>/src/test/setupTests.ts'],
+  setupFilesAfterEnv: ['<rootDir>/test/setupTests.ts'],
   testEnvironment: 'jest-environment-jsdom',
   moduleNameMapper: {
     '^@/components/(.*)$': '<rootDir>/src/components/$1',
@@ -26,10 +26,11 @@ const customJestConfig = {
     // Handle image imports
     '\\.(jpg|jpeg|png|gif|eot|otf|webp|svg|ttf|woff|woff2|mp4|webm|wav|mp3|m4a|aac|oga)$': '<rootDir>/__mocks__/fileMock.js',
   },
+  
   testMatch: [
-    "<rootDir>/src/**/__tests__/**/*.{js,jsx,ts,tsx}",
-    "<rootDir>/src/**/*.{spec,test}.{js,jsx,ts,tsx}"
+    "<rootDir>/test/**/*.{js,jsx,ts,tsx}"
   ],
+  
   coverageDirectory: "<rootDir>/coverage",
   collectCoverageFrom: [
     "src/**/*.{js,jsx,ts,tsx}",

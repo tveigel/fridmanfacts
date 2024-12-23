@@ -2,13 +2,20 @@
 export default function EpisodeHeader({ thumbnail, title, guest, date, videoLink }) {
   return (
     <div className="mb-12">
-      {/* Card container */}
-      <div className="bg-white rounded-xl shadow-md overflow-hidden">
-        <div className="p-6 sm:p-8">
-          {/* Title and metadata */}
-          <div className="mb-6">
-            <h1 className="text-3xl font-bold mb-4 text-gray-900">{title}</h1>
-            <div className="flex flex-wrap gap-4 text-gray-600">
+      <div className="bg-black rounded-xl shadow-md overflow-hidden relative"> {/* Added relative */}
+        <div className="p-12">
+          {/* Logo - absolutely positioned in center-right */}
+          <div className="absolute right-12 top-1/2 -translate-y-1/2">
+            <img 
+              src="/CommunityFacts.png" 
+              alt="CommunityFacts Logo" 
+              className="h-32 w-auto"
+            />
+          </div>
+           {/* Content with right padding to avoid logo overlap */}
+          <div className="pr-44"> {/* Added padding to prevent text overlap with logo */}
+            <h1 className="text-3xl font-bold mb-4 text-white">{title}</h1>
+            <div className="flex flex-wrap gap-4 text-gray-300">
               <div className="flex items-center gap-2">
                 <span className="font-medium">Guest:</span>
                 <span>{guest}</span>

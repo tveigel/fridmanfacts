@@ -30,14 +30,23 @@ export default function MainPageLayout({ children }) {
     <div className="max-w-[1920px] mx-auto px-7 py-12">
       {/* Hero Section */}
       <div className="bg-black text-white rounded-2xl p-12 mb-16">
-        <h1 className="text-4xl font-bold mb-4">
-          Community-Driven Fact Checking
-        </h1>
-        <p className="text-xl text-gray-300 max-w-2xl">
-          Join our community in verifying and discussing the accuracy of information 
-          shared in popular podcasts and interviews.
-        </p>
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-4xl font-bold mb-4">
+            Community-Driven Fact Checking
+          </h1>
+          <p className="text-xl text-gray-300 max-w-2xl">
+            Join our community in verifying and discussing the accuracy of information 
+            shared in popular podcasts and interviews.
+          </p>
+        </div>
+        <img 
+          src="/CommunityFacts.png" 
+          alt="CommunityFacts Logo" 
+          className="h-32 w-auto"
+        />
       </div>
+    </div>
 
       {/* Two Column Layout */}
       <div className="grid grid-cols-[350px_1fr] gap-8">

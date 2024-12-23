@@ -1,4 +1,4 @@
-// src/app/profile/[userId]/page.js
+// src/app/profile/[username]/page.js
 "use client";
 
 import React, { Suspense } from 'react';
@@ -7,12 +7,12 @@ import UserProfile from '../../../components/profile/UserProfile';
 
 export default function ProfilePage() {
   const params = useParams();
-  const userId = params.userId; // Changed from id to userId to match route parameter
+  const username = params.username; // Changed from userId to username
 
   return (
     <div className="max-w-7xl mx-auto px-4 py-8">
       <Suspense fallback={<ProfileSkeleton />}>
-        <UserProfile userId={userId} />
+        <UserProfile username={username} /> {/* Pass username instead of userId */}
       </Suspense>
     </div>
   );
