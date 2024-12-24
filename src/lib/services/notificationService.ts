@@ -1,4 +1,3 @@
-// src/lib/services/notificationService.ts
 import { 
   collection, 
   addDoc,
@@ -13,7 +12,7 @@ import {
   writeBatch
 } from 'firebase/firestore';
 import { db } from '../firebase/firebaseConfig';
-import type { NotificationType } from '../types/types';
+import type { NotificationType, Notification } from '../types/types';
 
 type CreateNotificationParams = {
   userId: string;
@@ -43,7 +42,7 @@ export const notificationService = {
     }
   },
 
-  async getNotificationsForUser(userId: string) {
+  async getNotificationsForUser(userId: string): Promise<Notification[]> {
     try {
       const notificationsRef = collection(db, 'notifications');
       const q = query(
@@ -52,13 +51,21 @@ export const notificationService = {
       );
 
       const querySnapshot = await getDocs(q);
-      const notifications = querySnapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data(),
-        createdAt: doc.data().createdAt instanceof Timestamp ? 
-          doc.data().createdAt.toDate() : 
-          new Date()
-      }));
+      const notifications = querySnapshot.docs.map(doc => {
+        const data = doc.data();
+        return {
+          id: doc.id,
+          userId: data.userId,
+          message: data.message,
+          type: data.type as NotificationType,
+          factCheckId: data.factCheckId,
+          read: data.read ?? false,
+          viewed: data.viewed ?? false,
+          createdAt: data.createdAt instanceof Timestamp ? 
+            data.createdAt.toDate() : 
+            new Date()
+        } as Notification;
+      });
 
       return notifications;
     } catch (error) {

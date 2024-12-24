@@ -1,5 +1,6 @@
 import React from 'react';
 import { Info, Check, Flag, MessageSquare, ThumbsUp, Clock, TrendingUp } from 'lucide-react';
+import Image from 'next/image';
 
 const InfoPanel = ({ title, children, icon: Icon }) => (
   <div className="bg-black text-white rounded-2xl p-6 mb-6 w-full">
@@ -30,33 +31,33 @@ export default function MainPageLayout({ children }) {
     <div className="max-w-[1920px] mx-auto px-7 py-12">
       {/* Hero Section */}
       <div className="bg-black text-white rounded-2xl p-12 mb-16">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-4xl font-bold mb-4">
-            Community-Driven Fact Checking
-          </h1>
-          <p className="text-xl text-gray-300 max-w-2xl">
-            Join our community in verifying and discussing the accuracy of information 
-            shared in popular podcasts and interviews.
-          </p>
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-4xl font-bold mb-4">
+              Community-Driven Fact Checking
+            </h1>
+            <p className="text-xl text-gray-300 max-w-2xl">
+              Join our community in verifying and discussing the accuracy of information 
+              shared in popular podcasts and interviews.
+            </p>
+          </div>
+          <Image 
+            src="/CommunityFacts.png" 
+            alt="CommunityFacts Logo" 
+            width={128}  // Adjust based on your image's actual dimensions
+            height={128} // Adjust based on your image's actual dimensions
+            className="h-32 w-auto"
+          />
         </div>
-        <img 
-          src="/CommunityFacts.png" 
-          alt="CommunityFacts Logo" 
-          className="h-32 w-auto"
-        />
       </div>
-    </div>
 
       {/* Two Column Layout */}
       <div className="grid grid-cols-[350px_1fr] gap-8">
-        {/* Left Column - Stacked Panels */}
         <div>
-          {/* Mission Panel */}
           <InfoPanel title="Our Mission" icon={Info}>
             <div className="space-y-4">
               <p className="text-gray-300 text-sm leading-relaxed">
-                In today's era of long-form podcasts and interviews, valuable insights often 
+                In today&apos;s era of long-form podcasts and interviews, valuable insights often 
                 mix with unverified claims. Our platform empowers listeners to verify information
                 and engage in meaningful discussions.
               </p>

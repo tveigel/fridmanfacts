@@ -1,22 +1,6 @@
-// src/app/profile/[username]/page.js
 "use client";
 
 import React, { Suspense } from 'react';
-import { useParams } from 'next/navigation';
-import UserProfile from '../../../components/profile/UserProfile';
-
-export default function ProfilePage() {
-  const params = useParams();
-  const username = params.username; // Changed from userId to username
-
-  return (
-    <div className="max-w-7xl mx-auto px-4 py-8">
-      <Suspense fallback={<ProfileSkeleton />}>
-        <UserProfile username={username} /> {/* Pass username instead of userId */}
-      </Suspense>
-    </div>
-  );
-}
 
 function ProfileSkeleton() {
   return (
@@ -40,3 +24,16 @@ function ProfileSkeleton() {
   );
 }
 
+export default function ProfileLayout({
+  children
+}: {
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="max-w-7xl mx-auto px-4 py-8">
+      <Suspense fallback={<ProfileSkeleton />}>
+        {children}
+      </Suspense>
+    </div>
+  );
+}

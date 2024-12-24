@@ -44,11 +44,11 @@ export default function MainPagePanels() {
         {/* Mission Panel */}
         <InfoPanel title="Our Mission" icon={Info}>
           <div className="space-y-6">
-            <p className="text-gray-300 leading-relaxed">
-              In today's era of long-form podcasts and interviews, valuable insights often 
-              mix with unverified claims. Our platform empowers listeners to collaboratively 
-              verify information, provide context, and engage in meaningful discussions.
-            </p>
+          <p className="text-gray-300 leading-relaxed">
+            In today&apos;s era of long-form podcasts and interviews, valuable insights often 
+            mix with unverified claims. Our platform empowers listeners to collaboratively 
+            verify information, provide context, and engage in meaningful discussions.
+          </p>
             <div className="bg-white/5 rounded-xl p-6 space-y-4">
               <h3 className="font-semibold">Key Objectives:</h3>
               <ul className="space-y-3 text-gray-300">
@@ -72,11 +72,11 @@ export default function MainPagePanels() {
         {/* How It Works Panel */}
         <InfoPanel title="How It Works" icon={Flag}>
           <div className="space-y-6">
-            <p className="text-gray-300 mb-6">
-              Our platform makes fact-checking collaborative and engaging. Here's how 
-              you can participate:
-            </p>
-            <div className="space-y-6">
+          <p className="text-gray-300 mb-6">
+            Our platform makes fact-checking collaborative and engaging. Here&apos;s how 
+            you can participate:
+          </p>
+                      <div className="space-y-6">
               <Feature
                 icon={Flag}
                 title="Submit Fact Checks"

@@ -22,7 +22,7 @@ export default function WelcomeModalContainer() {
       };
       setup();
     }
-  }, [needsUsername, showWelcomeModal, user?.emailVerified]);
+  }, [needsUsername, showWelcomeModal, user?.emailVerified, setShowWelcomeModal]);
 
   const handleConfirm = async (username) => {
     await finalizeUserRegistration(username);

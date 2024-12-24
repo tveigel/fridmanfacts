@@ -1,4 +1,5 @@
 import React from 'react';
+import Image from 'next/image';
 import { ListChecks, MessageSquare } from 'lucide-react';
 
 export default function ProfileHeader({ 
@@ -12,11 +13,14 @@ export default function ProfileHeader({
       <div className="flex items-center gap-6">
         {/* Profile Image */}
         {profile?.photoURL ? (
-          <img
-            src={profile.photoURL}
-            alt={`${profile.displayName || 'User'}'s profile`}
-            className="w-24 h-24 rounded-full"
-          />
+          <div className="relative w-24 h-24">
+            <Image
+              src={profile.photoURL}
+              alt={`${profile.displayName || 'User'}'s profile`}
+              fill
+              className="rounded-full object-cover"
+            />
+          </div>
         ) : (
           <div className="w-24 h-24 rounded-full bg-gray-200 flex items-center justify-center">
             <span className="text-4xl text-gray-400">

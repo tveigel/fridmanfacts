@@ -1,4 +1,4 @@
-// services/firebase/types.ts
+// src/lib/types/types.ts
 export type FactCheck = {
   id: string;
   episodeId: string;
@@ -8,8 +8,13 @@ export type FactCheck = {
   source: string;
   context: string;
   status: 'UNVALIDATED' | 'VALIDATED_FALSE' | 'VALIDATED_CONTROVERSIAL' | 'VALIDATED_TRUE';
-  upvotes: number;  // New field
-  downvotes: number;  // New field
+  moderatorValidation?: 'UNVALIDATED' | 'VALIDATED_FALSE' | 'VALIDATED_CONTROVERSIAL' | 'VALIDATED_TRUE';
+  moderatorNote?: string;
+  moderatorSourceLink?: string;
+  moderatedBy?: string;
+  moderatedAt?: any; // Firebase Timestamp
+  upvotes: number;
+  downvotes: number;
   createdAt: any; // Firebase Timestamp
   updatedAt: any; // Firebase Timestamp
 };
@@ -30,6 +35,7 @@ export type UserVotesMap = {
 
 export type OnDeleteFunction = (factCheckId: string) => void;
 
+// Update this in your types.ts file
 export type Comment = {
   id: string;
   factCheckId: string;
@@ -38,6 +44,10 @@ export type Comment = {
   parentCommentId: string | null;
   upvotes: number;
   downvotes: number;
+  isDeleted?: boolean;
+  deletedAt?: any; // Firebase Timestamp
+  deletedBy?: string;
+  moderatorReason?: string | null;
   createdAt: any; // Firebase Timestamp
   updatedAt: any; // Firebase Timestamp
 };

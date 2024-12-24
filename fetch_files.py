@@ -3,30 +3,17 @@ import pyperclip
 
 # List of files to copy
 files_to_copy = [
-    # Components
-    "components/auth/LoginModal.js",        # Likely handles user authentication modals.
-    "components/common/Modal.js",           # A generic modal component to be used for the popup.
-    "components/profile/ProfileHeader.js",  # May display the username after it's set.
-    "components/profile/UserProfile.js",    # Likely manages user profile-related information.
-
-    # Context
-    "lib/context/AuthContext.tsx",          # Likely handles user authentication state.
-    "lib/context/LoginModalContext.tsx",    # Context managing login modal, possibly reusable for this modal.
-
-    # Utilities
-    "lib/utils/userUtils.js",               # Utilities related to user management and username generation.
-    "lib/utils/constants.js",               # Might define reusable constants like default username format or lengths.
-
-    # Services
-    "lib/services/userService.js",          # (If it exists, for API calls related to user registration or updates.)
-
-    # Pages
-    "app/layout.js",                        # Might require layout modifications to include the modal.
-    "app/page.js",                          # Entry point for your app, where the modal might get triggered on first login.
+    "src/lib/types/types.ts",
+    "src/lib/services/factCheckService.ts",
+    "src/lib/services/karmaService.ts",
+    "src/hooks/useModeration.ts",
+    "src/lib/types/validation.ts",
+    "src/lib/utils/constants.js"
 ]
 
+
 # Base directory of your project
-base_dir = "C:/Users/timveigel/Documents/fridmanfacts/crowdcheck/src"
+base_dir = "C:/Users/timveigel/Documents/fridmanfacts/crowdcheck/"
 
 # Initialize clipboard content
 clipboard_content = ""

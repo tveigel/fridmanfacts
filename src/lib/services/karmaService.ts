@@ -13,6 +13,7 @@ import {
   runTransaction,
   writeBatch,
 } from 'firebase/firestore';
+import { FirebaseError } from 'firebase/app';
 import { db } from '../firebase/firebaseConfig';
 import type { KarmaAction, KarmaHistoryEntry, UserKarma } from '../types/types';
 

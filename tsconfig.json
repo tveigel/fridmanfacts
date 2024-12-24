@@ -34,7 +34,7 @@
     ".next/types/**/*.ts",
     "**/*.ts",
     "**/*.tsx"
-, "src/components/fact-checks/core/FactCheck.js"  ],
+, "src/components/fact-checks/core/FactCheck.js", "src/app/search/SearchResults.js"  ],
   "exclude": [
     "node_modules"
   ]

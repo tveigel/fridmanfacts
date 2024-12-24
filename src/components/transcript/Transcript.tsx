@@ -9,20 +9,44 @@ import SelectionModeButton from '../fact-checks/SelectionModeButton';
 import SelectionPopup from '../fact-checks/SelectionPopup';
 import Modal from '../common/Modal';
 import FactCheckSubmission from '../fact-checks/FactCheckSubmission';
-import TranscriptEntry from './TranscriptEntry';
+import { TranscriptEntry } from './TranscriptEntry';
 import FactCheckFilterBar from '../fact-checks/FactCheckFilterBar';
 import { LAYOUT } from '../../lib/utils/constants';
+import { FactCheck, FactCheckMap } from '../../lib/types/types';
 
-export default function Transcript({ transcript, timestamps, episodeId, initialSelectedFactCheckId }) {
+interface Timestamp {
+  time: string;
+  chapter: string;
+}
+
+interface TranscriptEntryType {
+  time: string;
+  speaker: string;
+  text: string;
+}
+
+interface TranscriptProps {
+  transcript: TranscriptEntryType[];
+  timestamps: Timestamp[];
+  episodeId: string;
+  initialSelectedFactCheckId?: string;
+}
+
+export default function Transcript({ 
+  transcript, 
+  timestamps, 
+  episodeId, 
+  initialSelectedFactCheckId 
+}: TranscriptProps) {
   const { user } = useAuth();
-  const transcriptRef = useRef(null);
+  const transcriptRef = useRef<HTMLDivElement>(null);
   
   const {
     factChecks,
     allFactChecks,
     userVotes,
     handleVote,
-    handleDelete,
+    handleUpdateOrDelete,
     selectedFactCheck,
     setSelectedFactCheck,
     loading,
@@ -41,13 +65,11 @@ export default function Transcript({ transcript, timestamps, episodeId, initialS
     handleFactCheckClick,
   } = useTextSelection();
 
-  // Create timestamp map for easy reference
-  const timestampMap = timestamps.reduce((acc, ts) => {
+  const timestampMap = timestamps.reduce((acc: { [key: string]: string }, ts) => {
     acc[ts.time] = ts.chapter;
     return acc;
   }, {});
 
-  // Handle initial scroll to selected fact check
   useEffect(() => {
     const handleInitialScroll = async () => {
       if (initialSelectedFactCheckId && allFactChecks.length > 0) {
@@ -58,7 +80,6 @@ export default function Transcript({ transcript, timestamps, episodeId, initialS
           const transcriptElement = document.getElementById(`transcript-${sanitizedTime}`);
           
           if (transcriptElement) {
-            // Wait for next tick to ensure elements are rendered
             setTimeout(() => {
               transcriptElement.scrollIntoView({ 
                 behavior: 'smooth', 
@@ -84,8 +105,7 @@ export default function Transcript({ transcript, timestamps, episodeId, initialS
     handleInitialScroll();
   }, [initialSelectedFactCheckId, allFactChecks, setSelectedFactCheck]);
 
-  // Handler for fact check selection from highlighted text
-  const handleFactCheckSelect = (factCheck) => {
+  const handleFactCheckSelect = (factCheck: FactCheck | null) => {
     setSelectedFactCheck(factCheck);
     if (factCheck) {
       const sanitizedTime = factCheck.transcriptTime.replace(/[:()]/g, "");
@@ -122,7 +142,6 @@ export default function Transcript({ transcript, timestamps, episodeId, initialS
   return (
     <div className="relative w-full">
       <div className={`flex ${LAYOUT.SIDEBAR_GAP} relative`}>
-        {/* Transcript Column */}
         <div 
           ref={transcriptRef}
           className={`${LAYOUT.CONTENT_WIDTH}`}
@@ -143,9 +162,7 @@ export default function Transcript({ transcript, timestamps, episodeId, initialS
           </div>
         </div>
 
-        {/* Fixed width container for fact check panel */}
         <div className={`${LAYOUT.SIDEBAR_WIDTH} relative`}>
-          {/* Add the filter bar above the fact check panel */}
           <FactCheckFilterBar />
           
           <div className="sticky top-4 max-h-screen overflow-y-auto pb-8">
@@ -153,7 +170,7 @@ export default function Transcript({ transcript, timestamps, episodeId, initialS
               factChecks={allFactChecks}
               onVote={handleVote}
               userVotes={userVotes}
-              onDelete={handleDelete}
+              onDelete={handleUpdateOrDelete}
               transcriptRef={transcriptRef}
               selectedFactCheck={selectedFactCheck}
               onFactCheckSelect={setSelectedFactCheck}
@@ -162,7 +179,6 @@ export default function Transcript({ transcript, timestamps, episodeId, initialS
         </div>
       </div>
 
-      {/* Selection Popup */}
       {popupPosition && isSelectionMode && selectedText && (
         <SelectionPopup
           top={popupPosition.top}
@@ -171,13 +187,11 @@ export default function Transcript({ transcript, timestamps, episodeId, initialS
         />
       )}
 
-      {/* Selection Mode Button - Always show this */}
       <SelectionModeButton
         isActive={isSelectionMode}
         onClick={() => setIsSelectionMode(!isSelectionMode)}
       />
 
-      {/* Fact Check Modal */}
       <Modal isOpen={showModal} onClose={() => setShowModal(false)}>
         <FactCheckSubmission
           episodeId={episodeId}
