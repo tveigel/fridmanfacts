@@ -1,8 +1,7 @@
-// src/components/admin/UserMigration.js
 'use client';
 
 import { useState } from 'react';
-import { collection, getDocs, doc, getDoc, setDoc } from 'firebase/firestore';
+import { collection, getDocs, doc, setDoc } from 'firebase/firestore';
 import { db } from '../../lib/firebase/firebaseConfig';
 import { generateUsername } from '../../lib/utils/userUtils';
 
@@ -60,7 +59,7 @@ export default function UserMigration() {
       
       <div className="mb-4">
         <p className="text-gray-600 mb-2">
-          This tool will generate usernames for all users who don't have one yet.
+          This tool will generate usernames for all users who don&apos;t have one yet.
           Existing usernames will not be modified.
         </p>
         
@@ -69,7 +68,7 @@ export default function UserMigration() {
           disabled={isLoading}
           className="px-4 py-2 bg-green-500 text-white rounded hover:bg-green-600 disabled:opacity-50"
         >
-          {isLoading ? 'Migrating...' : 'Start Migration'}
+          {isLoading ? "Migrating..." : "Start Migration"}
         </button>
       </div>
 

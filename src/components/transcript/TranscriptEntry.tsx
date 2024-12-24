@@ -1,15 +1,42 @@
-// components/transcript/TranscriptEntry.js
 import React from 'react';
 import HighlightedText from '../fact-checks/HighlightedText';
+import { FactCheck } from '../../lib/types/types';
 
-export default function TranscriptEntry({ 
+interface TranscriptEntry {
+  time: string;
+  text: string;
+  speaker?: string;
+}
+
+interface TimestampMap {
+  [key: string]: string;
+}
+
+interface FactCheckMap {
+  [key: string]: FactCheck[];
+}
+
+interface TranscriptEntryProps {
+  entry: TranscriptEntry;
+  timestampMap: TimestampMap;
+  factChecks: FactCheckMap;
+  isSelectionMode: boolean;
+  onTextSelection: (data: {
+    rect: DOMRect;
+    selectedText: string;
+    entry: TranscriptEntry;
+  }) => void;
+  onFactCheckClick: (factCheck: FactCheck) => void;
+}
+
+export function TranscriptEntry({ 
   entry, 
   timestampMap, 
   factChecks, 
   isSelectionMode, 
   onTextSelection, 
   onFactCheckClick 
-}) {
+}: TranscriptEntryProps) {
   if (!entry || !entry.time) return null;
   
   const sanitizedTime = entry.time.replace(/[:()]/g, "");
@@ -17,21 +44,30 @@ export default function TranscriptEntry({
   const isTimestamp = timestampMap[entry.time];
   const hasNewSpeaker = entry.speaker && entry.speaker.trim().length > 0;
   
-  const handleMouseUp = (e) => {
-    e.preventDefault(); // Prevent any default handling
+  const handleMouseUp = (e: React.MouseEvent) => {
+    e.preventDefault();
     const selection = window.getSelection();
-    const selectedText = selection?.toString().trim();
     
-    if (selectedText && selection?.rangeCount > 0) {
-      const range = selection.getRangeAt(0);
-      const rect = range.getBoundingClientRect();
-      
-      // Pass the actual viewport coordinates
-      onTextSelection({
-        rect,
-        selectedText,
-        entry
-      });
+    if (!selection) return;
+    
+    const selectedText = selection.toString().trim();
+    
+    if (selectedText && selection.rangeCount > 0) {
+      try {
+        const range = selection.getRangeAt(0);
+        if (!range) return;
+        
+        const rect = range.getBoundingClientRect();
+        if (!rect) return;
+        
+        onTextSelection({
+          rect,
+          selectedText,
+          entry
+        });
+      } catch (error) {
+        console.error('Error getting selection range:', error);
+      }
     }
   };
   
@@ -44,7 +80,6 @@ export default function TranscriptEntry({
                   mb-6`}
       onMouseUp={handleMouseUp}
     >
-      {/* Time and Chapter with larger text */}
       <div className="mb-6 flex items-center gap-4">
         <strong className="transcript-time">{entry.time}</strong>
         {isTimestamp && (
@@ -54,7 +89,6 @@ export default function TranscriptEntry({
         )}
       </div>
 
-      {/* Transcript Text with larger font */}
       <div className="transcript-text">
         {hasNewSpeaker && (
           <em className="transcript-speaker block mb-4 text-gray-900">

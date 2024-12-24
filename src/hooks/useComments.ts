@@ -1,4 +1,3 @@
-// src/hooks/useComments.ts
 import { useState, useEffect } from 'react';
 import { useAuth } from '../lib/context/AuthContext';
 import { collection, query, where, getDocs, onSnapshot } from 'firebase/firestore';
@@ -26,13 +25,34 @@ export function useComments(factCheckId: string) {
     const unsubscribe = onSnapshot(q, 
       async (snapshot) => {
         try {
-          const commentsData = snapshot.docs.map(doc => ({
-            id: doc.id,
-            ...doc.data(),
-            createdAt: doc.data().createdAt?.toDate(),
-            updatedAt: doc.data().updatedAt?.toDate(),
-            deletedAt: doc.data().deletedAt?.toDate()
-          })) as Comment[];
+          const commentsData = snapshot.docs.map(doc => {
+            const data = doc.data();
+            const comment: Comment = {
+              id: doc.id,
+              factCheckId: data.factCheckId,
+              userId: data.userId,
+              content: data.content,
+              parentCommentId: data.parentCommentId,
+              upvotes: data.upvotes ?? 0,
+              downvotes: data.downvotes ?? 0,
+              createdAt: data.createdAt?.toDate(),
+              updatedAt: data.updatedAt?.toDate(),
+              isDeleted: data.isDeleted ?? false,
+            };
+
+            // Add optional fields only if they exist
+            if (data.deletedAt) {
+              comment.deletedAt = data.deletedAt.toDate();
+            }
+            if (data.deletedBy) {
+              comment.deletedBy = data.deletedBy;
+            }
+            if (data.moderatorReason !== undefined) {
+              comment.moderatorReason = data.moderatorReason;
+            }
+
+            return comment;
+          });
 
           setComments(commentsData);
 

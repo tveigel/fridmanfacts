@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
+import Image from 'next/image';
 import { collection, getDocs, query, where, orderBy, limit } from 'firebase/firestore';
 import { db } from '../lib/firebase/firebaseConfig';
 import { ChevronRight, ChevronLeft, TrendingUp, Clock, ArrowRight } from 'lucide-react';
@@ -42,11 +43,12 @@ const TrendingEpisodeCard = ({ episode }) => {
       className="group relative bg-white rounded-xl shadow-sm hover:shadow-md transition-all duration-300 overflow-hidden flex flex-col transform hover:scale-[1.02]"
     >
       {episode.thumbnail && (
-        <div className="w-full h-36 overflow-hidden rounded-t-xl">
-          <img
+        <div className="w-full h-36 overflow-hidden rounded-t-xl relative">
+          <Image
             src={episode.thumbnail}
             alt={episode.title}
-            className="w-full h-full object-contain bg-black transition-transform duration-300 group-hover:scale-105"
+            fill
+            className="object-contain bg-black transition-transform duration-300 group-hover:scale-105"
           />
         </div>
       )}
@@ -99,11 +101,12 @@ const RecentEpisodeCard = ({ episode }) => (
     className="group bg-white rounded-lg shadow-sm hover:shadow-md transition-all duration-300 p-6 flex gap-6 transform hover:scale-[1.01]"
   >
     {episode.thumbnail && (
-      <div className="w-48 h-32 flex-shrink-0 overflow-hidden rounded-md">
-        <img
+      <div className="w-48 h-32 flex-shrink-0 overflow-hidden rounded-md relative">
+        <Image
           src={episode.thumbnail}
           alt={episode.title}
-          className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
+          fill
+          className="object-cover transition-transform duration-300 group-hover:scale-105"
         />
       </div>
     )}

@@ -6,10 +6,11 @@ import { AuthProvider } from "../lib/context/AuthContext";
 import { NotificationsProvider } from "../lib/context/NotificationsContext";
 import { FactCheckSettingsProvider } from "../lib/context/FactCheckSettingsContext";
 import { LoginModalProvider } from "../lib/context/LoginModalContext";
-import { UsernameProvider } from '../lib/context/UsernameContext';
 import ErrorBoundary from "../components/common/ErrorBoundary";
 import Navbar from "../components/common/Navbar";
 import WelcomeModalContainer from '../components/auth/WelcomeModalContainer';
+import { UsernameProvider } from '../lib/context/UsernameContext';
+
 
 const geistSans = localFont({
   src: "./fonts/GeistVF.woff",

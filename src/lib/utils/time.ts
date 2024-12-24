@@ -55,8 +55,9 @@ export const serializeTimestamp = (timestamp: Timestamp | null | undefined): str
   return timestamp.toMillis().toString();
 };
 
-export const serializeFirebaseData = <T extends Record<string, any>>(data: T): Record<string, any> => {
-  const serialized = { ...data };
+export const serializeFirebaseData = <T extends Record<string, any>>(data: T): T => {
+  const serialized: Record<string, any> = {};
+  
   for (const [key, value] of Object.entries(data)) {
     if (value && typeof value === 'object') {
       if (value instanceof Timestamp) {
@@ -65,12 +66,15 @@ export const serializeFirebaseData = <T extends Record<string, any>>(data: T): R
         serialized[key] = serializeTimestamp(value);
       } else if (Array.isArray(value)) {
         serialized[key] = value.map(item => 
-          typeof item === 'object' ? serializeFirebaseData(item) : item
+          typeof item === 'object' && item !== null ? serializeFirebaseData(item) : item
         );
-      } else if (typeof value === 'object') {
+      } else if (typeof value === 'object' && value !== null) {
         serialized[key] = serializeFirebaseData(value);
       }
+    } else {
+      serialized[key] = value;
     }
   }
-  return serialized;
+  
+  return serialized as T;
 };

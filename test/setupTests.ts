@@ -1,17 +1,27 @@
 import '@testing-library/jest-dom';
-import { TextDecoder, TextEncoder } from 'util';
+import util from 'util';
 
-// Set up DOM environment mocks
-global.TextEncoder = TextEncoder;
-global.TextDecoder = TextDecoder;
+// Explicitly type the TextEncoder and TextDecoder
+const customTextEncoder = util.TextEncoder as unknown as typeof global.TextEncoder;
+const customTextDecoder = util.TextDecoder as unknown as typeof global.TextDecoder;
 
-// Mock window.fs API (required for file operations in tests)
-global.window = {
-  ...global.window,
-  fs: {
-    readFile: jest.fn().mockImplementation(() => Promise.resolve(new Uint8Array())),
+if (typeof global.TextEncoder === 'undefined') {
+  global.TextEncoder = customTextEncoder;
+}
+
+if (typeof global.TextDecoder === 'undefined') {
+  global.TextDecoder = customTextDecoder;
+}
+
+// Mock window.fs API
+Object.defineProperty(global, 'window', {
+  value: {
+    fs: {
+      readFile: jest.fn().mockImplementation(() => Promise.resolve(new Uint8Array())),
+    },
   },
-};
+  writable: true,
+});
 
 // Mock ResizeObserver
 global.ResizeObserver = jest.fn().mockImplementation(() => ({
@@ -35,15 +45,3 @@ process.env = {
   NEXT_PUBLIC_FIREBASE_PROJECT_ID: 'mock-project-id',
   NODE_ENV: 'test'
 };
-
-// Suppress specific console methods during tests
-const originalConsole = { ...console };
-console.error = jest.fn((...args) => {
-  if (args[0]?.includes?.('Warning:')) return;
-  originalConsole.error(...args);
-});
-
-console.warn = jest.fn((...args) => {
-  if (args[0]?.includes?.('Warning:')) return;
-  originalConsole.warn(...args);
-});

@@ -1,4 +1,5 @@
-// src/components/profile/UserProfile.js
+"use client";
+
 import React, { useState, useEffect } from 'react';
 import { collection, query, where, getDocs, orderBy, doc, getDoc } from 'firebase/firestore';
 import { db } from '../../lib/firebase/firebaseConfig';
@@ -7,15 +8,68 @@ import ProfileHeader from './ProfileHeader';
 import ProfileActivity from './ProfileActivity';
 import KarmaAchievements from '../karma/KarmaAchievements';
 
-export default function UserProfile({ username }) {  // Changed from userId to username
+interface UserProfileProps {
+  username: string;
+}
+
+interface ProfileData {
+  id: string;
+  username?: string;
+  [key: string]: any;
+}
+
+// Updated interfaces based on your Firebase data structure
+interface FactCheckActivity {
+  id: string;
+  createdAt: any; // Firebase Timestamp
+  episodeId: string;
+  flaggedText: string;
+  moderatedAt?: string;
+  moderatedBy?: string;
+  moderatorNote?: string;
+  source?: string;
+  status: string;
+  submittedBy: string;
+  transcriptTime: string;
+  updatedAt: string;
+  [key: string]: any;
+}
+
+interface CommentActivity {
+  id: string;
+  content: string;
+  createdAt: any; // Firebase Timestamp
+  downvotes: number;
+  factCheckId: string;
+  isDeleted: boolean;
+  parentCommentId: string | null;
+  updatedAt: string;
+  upvotes: number;
+  userId: string;
+  [key: string]: any;
+}
+
+interface Activities {
+  factChecks: FactCheckActivity[];
+  comments: CommentActivity[];
+}
+
+function mapDocToActivity<T>(doc: any): T {
+  return {
+    id: doc.id,
+    ...doc.data()
+  } as T;
+}
+
+export default function UserProfile({ username }: UserProfileProps) {
   const { user } = useAuth();
-  const [profileData, setProfileData] = useState(null);
-  const [activities, setActivities] = useState({
+  const [profileData, setProfileData] = useState<ProfileData | null>(null);
+  const [activities, setActivities] = useState<Activities>({
     factChecks: [],
     comments: []
   });
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     async function fetchProfileData() {
@@ -28,7 +82,6 @@ export default function UserProfile({ username }) {  // Changed from userId to u
         setLoading(true);
         setError(null);
 
-        // First, get the userId by querying users collection with username
         const usersQuery = query(
           collection(db, 'users'),
           where('username', '==', username)
@@ -41,13 +94,11 @@ export default function UserProfile({ username }) {  // Changed from userId to u
           return;
         }
 
-        // Get the first (and should be only) user document
         const userDoc = userSnapshot.docs[0];
         const userId = userDoc.id;
-        const profileData = { id: userDoc.id, ...userDoc.data() };
+        const profileData = { id: userDoc.id, ...userDoc.data() } as ProfileData;
         setProfileData(profileData);
 
-        // Fetch fact checks using userId
         try {
           const factChecksQuery = query(
             collection(db, 'factChecks'),
@@ -55,13 +106,11 @@ export default function UserProfile({ username }) {  // Changed from userId to u
             orderBy('createdAt', 'desc')
           );
           const factChecksSnapshot = await getDocs(factChecksQuery);
-          const factChecks = factChecksSnapshot.docs.map(doc => ({
-            id: doc.id,
-            ...doc.data()
-          }));
+          const factChecks = factChecksSnapshot.docs.map(doc => 
+            mapDocToActivity<FactCheckActivity>(doc)
+          );
           setActivities(prev => ({ ...prev, factChecks }));
         } catch (indexError) {
-          // If index error occurs, try without orderBy
           console.log('Falling back to unordered fact checks query');
           try {
             const fallbackQuery = query(
@@ -70,10 +119,7 @@ export default function UserProfile({ username }) {  // Changed from userId to u
             );
             const fallbackSnapshot = await getDocs(fallbackQuery);
             const factChecks = fallbackSnapshot.docs
-              .map(doc => ({
-                id: doc.id,
-                ...doc.data()
-              }))
+              .map(doc => mapDocToActivity<FactCheckActivity>(doc))
               .sort((a, b) => {
                 const dateA = a.createdAt?.toDate?.() || new Date(0);
                 const dateB = b.createdAt?.toDate?.() || new Date(0);
@@ -86,7 +132,6 @@ export default function UserProfile({ username }) {  // Changed from userId to u
           }
         }
 
-        // Fetch comments using userId
         try {
           const commentsQuery = query(
             collection(db, 'comments'),
@@ -94,10 +139,7 @@ export default function UserProfile({ username }) {  // Changed from userId to u
           );
           const commentsSnapshot = await getDocs(commentsQuery);
           const comments = commentsSnapshot.docs
-            .map(doc => ({
-              id: doc.id,
-              ...doc.data()
-            }))
+            .map(doc => mapDocToActivity<CommentActivity>(doc))
             .sort((a, b) => {
               const dateA = a.createdAt?.toDate?.() || new Date(0);
               const dateB = b.createdAt?.toDate?.() || new Date(0);
@@ -107,11 +149,10 @@ export default function UserProfile({ username }) {  // Changed from userId to u
           setActivities(prev => ({ ...prev, comments }));
         } catch (commentsError) {
           console.error('Error fetching comments:', commentsError);
-          // Continue execution even if comments fail
         }
 
         setLoading(false);
-      } catch (err) {
+      } catch (err: any) {
         console.error('Error fetching profile:', err);
         if (err.message?.includes('index')) {
           setError(
@@ -125,7 +166,7 @@ export default function UserProfile({ username }) {  // Changed from userId to u
     }
 
     fetchProfileData();
-  }, [username]);  // Changed dependency from userId to username
+  }, [username]);
 
   if (error) {
     return (
@@ -171,6 +212,7 @@ export default function UserProfile({ username }) {  // Changed from userId to u
   );
 }
 
+// Re-added ProfileSkeleton component
 function ProfileSkeleton() {
   return (
     <div className="space-y-4 animate-pulse">

@@ -40,6 +40,7 @@ export interface ModalProps extends BaseComponentProps {
   title?: string;
   showCloseButton?: boolean;
   closeOnOutsideClick?: boolean;
+  children: ReactNode;
 }
 
 // Form Field Props
@@ -50,6 +51,7 @@ export interface FormFieldProps extends BaseComponentProps {
   helperText?: string;
 }
 
+// Auth Context Types
 export interface AuthContextType {
   user: User | null;
   login: () => Promise<void>;
@@ -87,6 +89,7 @@ export interface NotificationsContextType {
   markNotificationsAsViewed: () => Promise<void>;
 }
 
+// Component Specific Props
 export interface FactCheckSubmissionProps {
   episodeId: string;
   transcriptTime: string;
@@ -125,12 +128,6 @@ export interface TranscriptProps {
   }>;
   episodeId: string;
   initialSelectedFactCheckId?: string;
-}
-
-export interface ModalProps {
-  isOpen: boolean;
-  onClose: () => void;
-  children: ReactNode;
 }
 
 export interface SelectionPopupProps {

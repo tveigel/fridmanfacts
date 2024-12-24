@@ -77,10 +77,10 @@ export const factCheckService = {
         throw new Error('Fact check not found');
       }
   
-      const factCheck = factCheckDoc.data();
+      const factCheck = factCheckDoc.data() as FactCheck;
       
       // Handle karma for validation status changes
-      if (updates.moderatorValidation && factCheck.submittedBy) {
+      if ('moderatorValidation' in updates && updates.moderatorValidation && factCheck.submittedBy) {
         const previousStatus = factCheck.moderatorValidation;
         const newStatus = updates.moderatorValidation;
   

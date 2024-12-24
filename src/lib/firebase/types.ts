@@ -1,5 +1,5 @@
 // src/lib/firebase/types.ts
-// Create this new file
+
 
 import { 
     DocumentData, 

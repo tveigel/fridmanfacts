@@ -3,18 +3,12 @@ import pyperclip
 
 # List of files to copy
 files_to_copy = [
-    ".env.example",
-    ".env.local",
-    ".firebaserc",
-    "firebase.json",
-    "firestore.rules",
-    "next.config.mjs",
-    "package.json",
-    "lib/firebase/firebaseConfig.js",
-    "app/metadata.ts",
-    "tsconfig.json",
-    "postcss.config.mjs",
-    "tailwind.config.js"
+    "src/lib/types/types.ts",
+    "src/lib/services/factCheckService.ts",
+    "src/lib/services/karmaService.ts",
+    "src/hooks/useModeration.ts",
+    "src/lib/types/validation.ts",
+    "src/lib/utils/constants.js"
 ]
 
 

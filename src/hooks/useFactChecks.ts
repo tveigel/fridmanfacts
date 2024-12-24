@@ -107,7 +107,7 @@ export function useFactChecks({ episodeId }: { episodeId: string }) {
         return updated;
       });
   
-      await voteService.submitVote(factCheckId, user.uid, newValue, previousValue);
+      await voteService.submitVote(factCheckId, user.uid, newValue);
     } catch (error) {
       console.error('Error submitting vote:', error);
       // Revert optimistic updates on error

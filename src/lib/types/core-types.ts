@@ -141,6 +141,17 @@ export interface Notification {
   viewedAt?: Timestamp;
 }
 
+export interface NotificationsContextType {
+  notifications: Notification[];
+  unreadCount: number;
+  unviewedCount: number;
+  setUnviewedCount: (count: number) => void;
+  error: string | null;
+  markAsRead: (notificationId: string) => Promise<void>;
+  markAllAsRead: () => Promise<void>;
+  markNotificationsAsViewed: () => Promise<void>;
+}
+
 // Component Props Types
 export interface ProviderProps {
   children: ReactNode;
@@ -185,12 +196,7 @@ export interface UseKarma {
   error: string | null;
 }
 
-// Service Response Types
-export interface ServiceResponse<T> {
-  success: boolean;
-  data?: T;
-  error?: string;
-}
+
 
 // Error Types
 export class AppError extends Error {

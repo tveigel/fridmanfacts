@@ -4,6 +4,7 @@
 
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
+import Image from 'next/image';
 import { useRouter } from 'next/navigation';
 import { Search, Settings, X, Star } from 'lucide-react';
 import NotificationsIcon from './NotificationsIcon';
@@ -322,7 +323,12 @@ const LoginForm = ({ onClose }) => {
         disabled={loading}
         className="w-full py-2 px-4 border border-gray-300 rounded-md shadow-sm bg-white text-gray-700 hover:bg-gray-50 flex items-center justify-center gap-2"
       >
-        <img src="https://www.google.com/favicon.ico" alt="Google" className="w-4 h-4" />
+        <Image 
+          src="https://www.google.com/favicon.ico" 
+          alt="Google" 
+          width={16} 
+          height={16}
+        />
         Continue with Google
       </button>
 

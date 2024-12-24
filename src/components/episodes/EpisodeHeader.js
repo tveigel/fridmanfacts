@@ -1,4 +1,6 @@
 // src/components/episodes/EpisodeHeader.js
+import Image from 'next/image';
+
 export default function EpisodeHeader({ thumbnail, title, guest, date, videoLink }) {
   return (
     <div className="mb-12">
@@ -6,9 +8,11 @@ export default function EpisodeHeader({ thumbnail, title, guest, date, videoLink
         <div className="p-12">
           {/* Logo - absolutely positioned in center-right */}
           <div className="absolute right-12 top-1/2 -translate-y-1/2">
-            <img 
-              src="/CommunityFacts.png" 
-              alt="CommunityFacts Logo" 
+            <Image
+              src="/CommunityFacts.png"
+              alt="CommunityFacts Logo"
+              width={128}
+              height={128}
               className="h-32 w-auto"
             />
           </div>
@@ -36,11 +40,12 @@ export default function EpisodeHeader({ thumbnail, title, guest, date, videoLink
           {/* Image and watch button container */}
           <div className="flex flex-col sm:flex-row gap-6 items-center">
             {/* Thumbnail in a reasonable size */}
-            <div className="w-full sm:w-64 h-36 rounded-lg overflow-hidden flex-shrink-0">
-              <img
+            <div className="w-full sm:w-64 h-36 rounded-lg overflow-hidden flex-shrink-0 relative">
+              <Image
                 src={thumbnail}
                 alt={`Thumbnail for ${title}`}
-                className="w-full h-full object-cover"
+                fill
+                className="object-cover"
               />
             </div>
 

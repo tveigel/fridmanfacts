@@ -3,16 +3,20 @@ import { episodeService } from '../../../lib/services/episodeService';
 import EpisodeContent from './EpisodeContent';
 import { Metadata } from 'next';
 import { notFound } from 'next/navigation';
-import { ReadonlyURLSearchParams } from 'next/navigation';
 
 interface PageProps {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ selectedFactCheck?: string }>;
+  searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
+}
+
+export async function generateStaticParams() {
+  const episodes = await episodeService.getAllEpisodes();
+  return episodes;
 }
 
 export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
-  const resolvedParams = await params;
-  const episodeData = await episodeService.getEpisodeById(resolvedParams.id);
+  const { id } = await params;
+  const episodeData = await episodeService.getEpisodeById(id);
   
   if (!episodeData) {
     return {
@@ -26,25 +30,18 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
   };
 }
 
-export default async function Page(props: PageProps) {
-  const resolvedParams = await props.params;
-  const resolvedSearchParams = await props.searchParams;
-
+export default async function Page({ params }: PageProps) {
   try {
-    const episodeData = await episodeService.getEpisodeById(resolvedParams.id);
-    
+    const { id } = await params;
+    const episodeData = await episodeService.getEpisodeById(id);
+
     if (!episodeData) {
       notFound();
     }
 
-    return (
-      <EpisodeContent 
-        episodeData={episodeData}
-        selectedFactCheckId={resolvedSearchParams.selectedFactCheck}
-      />
-    );
+    return <EpisodeContent episodeData={episodeData} />;
   } catch (error) {
-    console.error('Error loading episode data:', error);
+    console.error("Error loading episode data:", error);
     throw error;
   }
 }

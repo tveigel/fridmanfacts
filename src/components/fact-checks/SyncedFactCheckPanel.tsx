@@ -1,12 +1,20 @@
-// src/components/fact-checks/SyncedFactCheckPanel.js
+// src/components/fact-checks/SyncedFactCheckPanel.tsx
 import React, { useEffect, useRef, useState, useMemo } from 'react';
 import FactCheck from './core/FactCheck';
-import FlagIcon from './FlagIcon';
-import { getStatusColors } from '../../lib/utils/colors';
-import { getVoteBasedStyle } from '../../lib/utils/votingUtils';
+import { FactCheck as FactCheckType, UserVotesMap } from '../../lib/types/types';
 import { useFactCheckSettings } from '../../lib/context/FactCheckSettingsContext';
 
-const SyncedFactCheckPanel = ({
+interface SyncedFactCheckPanelProps {
+  factChecks: FactCheckType[];
+  onVote: (factCheckId: string, value: number) => void;
+  userVotes: UserVotesMap;
+  onDelete: (factCheckId: string, updatedFactCheck?: FactCheckType) => void;
+  transcriptRef: React.RefObject<HTMLDivElement>;
+  selectedFactCheck: FactCheckType | null;
+  onFactCheckSelect: (factCheck: FactCheckType | null) => void;
+}
+
+const SyncedFactCheckPanel: React.FC<SyncedFactCheckPanelProps> = ({
   factChecks = [],
   onVote,
   userVotes,
@@ -15,23 +23,23 @@ const SyncedFactCheckPanel = ({
   selectedFactCheck,
   onFactCheckSelect
 }) => {
-  const [visibleFactChecks, setVisibleFactChecks] = useState([]);
-  const [collapsedStates, setCollapsedStates] = useState({});
+  const [visibleFactChecks, setVisibleFactChecks] = useState<FactCheckType[]>([]);
+  const [collapsedStates, setCollapsedStates] = useState<Record<string, boolean>>({});
   const [width, setWidth] = useState(850);
   const [isResizing, setIsResizing] = useState(false);
-  const panelRef = useRef(null);
-  const lastScrollTime = useRef(0);
+  const panelRef = useRef<HTMLDivElement>(null);
+  const lastScrollTime = useRef<number>(0);
   const { shouldShowFactCheck } = useFactCheckSettings();
   const SCROLL_THROTTLE = 100;
   const EXPAND_ZONE = 300;
 
-  const handleMouseDown = (e) => {
+  const handleMouseDown = (e: React.MouseEvent) => {
     e.preventDefault();
     setIsResizing(true);
   };
 
   useEffect(() => {
-    const handleMouseMove = (e) => {
+    const handleMouseMove = (e: MouseEvent) => {
       if (!isResizing) return;
       e.preventDefault();
       const newWidth = Math.max(500, Math.min(1200, document.body.clientWidth - e.clientX));
@@ -61,7 +69,6 @@ const SyncedFactCheckPanel = ({
     const viewportBottom = viewportTop + window.innerHeight;
     const viewportCenter = viewportTop + (window.innerHeight / 2);
     
-    // First filter by visibility in viewport
     return factChecks.filter(factCheck => {
       const element = transcriptRef.current?.querySelector(
         `[data-factcheck-id="${factCheck.id}"]`
@@ -106,17 +113,13 @@ const SyncedFactCheckPanel = ({
     return () => window.removeEventListener('scroll', throttledScroll);
   }, [factChecks]);
 
-  // Filter fact checks based on settings
   const factChecksToShow = useMemo(() => {
-    // If there's a selected fact check, show only that one if it passes the filters
     if (selectedFactCheck) {
       return shouldShowFactCheck(selectedFactCheck) ? [selectedFactCheck] : [];
     }
 
-    // Start with visible fact checks
     const visibleChecks = visibleFactChecks.filter(shouldShowFactCheck);
 
-    // Sort by vertical position
     return [...visibleChecks].sort((a, b) => {
       const elemA = document.querySelector(`[data-factcheck-id="${a.id}"]`);
       const elemB = document.querySelector(`[data-factcheck-id="${b.id}"]`);
@@ -162,7 +165,7 @@ const SyncedFactCheckPanel = ({
                     factCheck={factCheck}
                     onVote={onVote}
                     userVotes={userVotes}
-                    onDelete={onDelete}
+                    onUpdateOrDelete={onDelete}
                   />
                 </div>
               ))

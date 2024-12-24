@@ -18,6 +18,10 @@ import { auth, db } from "../firebase/firebaseConfig";
 import { generateUsername } from "../utils/userUtils"; 
 import { AuthContextType } from "../types/component-types";
 
+interface AuthProviderProps {
+  children: ReactNode;
+}
+
 
 
 const AuthContext = createContext<AuthContextType | null>(null);

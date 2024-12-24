@@ -1,71 +1,3 @@
-// Collections Structure
-
-/*
-Collection: users
-Additional fields for existing users collection
-*/
-interface User {
-  uid: string;
-  email: string;
-  role: 'user' | 'moderator' | 'admin';
-  displayName: string;
-  username: string;  // Add this field
-  photoURL?: string;
-  preferences: {
-    validationThreshold: number;
-    showControversialFlags: boolean;
-    showUnvalidatedFlags: boolean;
-  };
-  createdAt: timestamp;
-  updatedAt: timestamp;
-}
-
-/*
-Collection: factChecks
-Main collection for fact checking flags
-*/
-interface FactCheck {
-  id: string;
-  episodeId: string;
-  transcriptTime: string;
-  flaggedText: string;
-  flaggedTextStart: number; // Character index start in transcript entry
-  flaggedTextEnd: number;   // Character index end in transcript entry
-  submittedBy: string;      // User ID
-  source: string;           // URL or reference
-  context: string;          // User's explanation
-  status: 'UNVALIDATED' | 'VALIDATED_FALSE' | 'VALIDATED_CONTROVERSIAL' | 'VALIDATED_TRUE' | 'REJECTED';
-  voteCount: number;        // Denormalized vote count
-  moderatorId?: string;     // ID of mod who validated/rejected
-  moderatorNote?: string;   // Optional note from moderator
-  createdAt: timestamp;
-  updatedAt: timestamp;
-}
-
-/*
-Collection: votes
-Subcollection of factChecks for vote tracking
-*/
-interface Vote {
-  id: string;
-  userId: string;
-  value: 1 | -1;           // Upvote or downvote
-  createdAt: timestamp;
-}
-
-/*
-Collection: comments
-Subcollection of factChecks for comments
-*/
-interface Comment {
-  id: string;
-  userId: string;
-  text: string;
-  createdAt: timestamp;
-  updatedAt: timestamp;
-}
-
-// Firestore Security Rules
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
@@ -73,57 +5,168 @@ service cloud.firestore {
     function isAuthenticated() {
       return request.auth != null;
     }
-    
+
     function isAdmin() {
-      return isAuthenticated() && 
-             get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
-    }
-    
-    function isModerator() {
-      return isAuthenticated() && 
-             (get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'moderator' ||
-              get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin');
+      return isAuthenticated() && request.auth.token.admin == true;
     }
 
-    // User profiles
-    match /users/{userId} {
+    function isModerator() {
+      return isAuthenticated() && 
+        (request.auth.token.moderator == true || request.auth.token.admin == true);
+    }
+
+    function isValidKarmaAction(action) {
+      let validActions = [
+        'SUBMIT_FACT',
+        'FACT_VALIDATED_TRUE',
+        'FACT_VALIDATED_FALSE',
+        'FACT_VALIDATED_CONTROVERSIAL',
+        'FACT_DELETED',
+        'FACT_UPVOTED',
+        'FACT_DOWNVOTED',
+        'FACT_UPVOTE_REMOVED',
+        'FACT_DOWNVOTE_REMOVED',
+        'UNVALIDATED_FACT_UPVOTED',
+        'UNVALIDATED_FACT_DOWNVOTED',
+        'FACT_OWNER_UPVOTED',
+        'FACT_OWNER_DOWNVOTED',
+        'UPVOTE_GIVEN',
+        'UPVOTE_GIVEN_VALIDATED_TRUE',
+        'UPVOTE_GIVEN_VALIDATED_FALSE',
+        'DOWNVOTE_GIVEN_VALIDATED_TRUE',
+        'DOWNVOTE_GIVEN_VALIDATED_FALSE',
+        'UPVOTE_GIVEN_REMOVED',
+        'DOWNVOTE_GIVEN_REMOVED',
+        'DOWNVOTE_CORRECT_REMOVED',
+        'DOWNVOTE_VALIDATED_FACT_REMOVED',
+        'SUBMIT_COMMENT',
+        'COMMENT_UPVOTED',
+        'COMMENT_DOWNVOTED'
+      ];
+      return action in validActions;
+    }
+
+    // Episodes collection
+    match /episodes/{episodeId} {
       allow read: if true;
-      allow create: if isAuthenticated() && request.auth.uid == userId;
       allow update: if isAuthenticated() && 
-                      (request.auth.uid == userId || isAdmin()) &&
-                      !request.resource.data.diff(resource.data).affectedKeys()
-                        .hasAny(['role']); // Only admins can change roles
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['factCheckCount', 'updatedAt']);
+      allow write: if isAdmin();
+    }
+
+    // Fact Checks collection
+    match /factChecks/{factCheckId} {
+      allow read: if true;
+      allow create: if isAuthenticated();
+      allow update: if isModerator() || 
+        (isAuthenticated() && 
+         !request.resource.data.diff(resource.data).affectedKeys()
+           .hasAny(['moderatorValidation', 'moderatedBy', 'moderatedAt', 'status']));
+      allow delete: if isModerator();
+
+      match /votes/{voteId} {
+        allow read: if true;
+        allow write: if isAuthenticated() && request.auth.uid == voteId;
+      }
+    }
+
+    // Comments collection
+    match /comments/{commentId} {
+      allow read: if true;
+      allow create: if isAuthenticated() && 
+        request.resource.data.keys().hasAll(['userId', 'content', 'factCheckId']) && 
+        request.resource.data.userId == request.auth.uid;
+      allow update: if isAuthenticated() && (
+        (request.resource.data.diff(resource.data).affectedKeys()
+          .hasOnly(['upvotes', 'downvotes', 'updatedAt'])) ||
+        request.auth.uid == resource.data.userId ||
+        isModerator()
+      );
+      allow delete: if isAuthenticated() && 
+        (request.auth.uid == resource.data.userId || isModerator());
+
+      match /votes/{userId} {
+        allow read: if true;
+        allow write: if isAuthenticated() && request.auth.uid == userId;
+      }
+    }
+
+    // User Profiles collection
+    match /users/{userId} {
+      function isValidUsername(username) {
+        return username is string && 
+               username.matches('^[a-zA-Z0-9_]{3,20}$') &&
+               username.size() >= 3 && 
+               username.size() <= 20;
+      }
+
+      allow read: if true;
+      allow create: if isAuthenticated() && 
+                    request.auth.uid == userId &&
+                    isValidUsername(request.resource.data.username);
+      allow update: if isAuthenticated() && 
+                    (
+                      (request.auth.uid == userId && 
+                       !request.resource.data.diff(resource.data).affectedKeys().hasAny(['role', 'username'])) ||
+                      isAdmin()
+                    );
       allow delete: if isAdmin();
     }
 
-    // Fact checks
-    match /factChecks/{factId} {
-      allow read: if true;
-      allow create: if isAuthenticated();
+    // User Settings collection
+    match /userSettings/{userId} {
+      allow read: if isAuthenticated() && request.auth.uid == userId;
+      allow write: if isAuthenticated() && request.auth.uid == userId &&
+        request.resource.data.keys().hasAll(['defaultSettings', 'currentSettings', 'updatedAt']) &&
+        request.resource.data.defaultSettings is map &&
+        request.resource.data.currentSettings is map &&
+        request.resource.data.updatedAt is timestamp;
+    }
+
+    // Notifications collection
+    match /notifications/{notificationId} {
+      function isValidNotificationType(type) {
+        let validTypes = ['COMMENT_REPLY', 'VOTE_MILESTONE', 'MODERATION', 'FACT_CHECK_UPDATE'];
+        return type in validTypes;
+      }
+
+      allow read: if isAuthenticated() && resource.data.userId == request.auth.uid;
+      allow create: if isAuthenticated() &&
+        request.resource.data.keys().hasAll(['userId', 'message', 'type', 'factCheckId', 'createdAt']) &&
+        isValidNotificationType(request.resource.data.type) &&
+        (
+          request.resource.data.userId == request.auth.uid ||
+          (isModerator() && 
+           (request.resource.data.type == 'MODERATION' || request.resource.data.type == 'FACT_CHECK_UPDATE'))
+        ) &&
+        request.resource.data.createdAt is timestamp;
       allow update: if isAuthenticated() && 
-                      (resource.data.submittedBy == request.auth.uid || // Author can update
-                       isModerator()); // Moderators can update status
-      allow delete: if isModerator();
+        resource.data.userId == request.auth.uid && 
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['read', 'readAt', 'viewed', 'viewedAt']);
+      allow delete: if isAuthenticated() && resource.data.userId == request.auth.uid;
+    }
 
-      // Votes subcollection
-      match /votes/{voteId} {
-        allow read: if true;
-        allow create: if isAuthenticated() && 
-                       request.resource.data.userId == request.auth.uid &&
-                       !exists(/databases/$(database)/documents/factChecks/$(factId)/votes/$(request.auth.uid));
-        allow update, delete: if isAuthenticated() && 
-                              resource.data.userId == request.auth.uid;
-      }
+    // Karma History collection
+    match /karmaHistory/{entryId} {
+      allow read: if true;
+      allow create: if isAuthenticated() && 
+        request.resource.data.keys().hasAll(['userId', 'action', 'points', 'targetId', 'timestamp']) &&
+        isValidKarmaAction(request.resource.data.action) &&
+        request.resource.data.points is number &&
+        request.resource.data.targetId is string &&
+        request.resource.data.timestamp is timestamp;
+      allow update, delete: if false;
+    }
 
-      // Comments subcollection
-      match /comments/{commentId} {
-        allow read: if true;
-        allow create: if isAuthenticated();
-        allow update: if isAuthenticated() && 
-                       resource.data.userId == request.auth.uid;
-        allow delete: if isAuthenticated() && 
-                       (resource.data.userId == request.auth.uid || isModerator());
-      }
+    // User Karma collection
+    match /userKarma/{userId} {
+      allow read: if true;
+      allow create, update: if isAuthenticated() &&
+        request.resource.data.keys().hasAll(['userId', 'totalKarma', 'lastUpdated']) &&
+        request.resource.data.userId == userId &&
+        request.resource.data.totalKarma is number &&
+        request.resource.data.lastUpdated is timestamp;
+      allow delete: if false;
     }
   }
 }
