@@ -17,6 +17,7 @@
     "clsx": "^2.1.1",
     "crowdcheck": "file:",
     "firebase": "^11.0.2",
+    "firebase-admin": "^13.0.2",
     "lucide-react": "^0.464.0",
     "next": "15.0.3",
     "react": "^18.2.0",
