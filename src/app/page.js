@@ -3,20 +3,24 @@
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
-import { collection, getDocs, query, where, orderBy, limit } from 'firebase/firestore';
+import { collection, getDocs, query, where, orderBy, limit, startAfter } from 'firebase/firestore';
 import { db } from '../lib/firebase/firebaseConfig';
 import { ChevronRight, ChevronLeft, TrendingUp, Clock, ArrowRight } from 'lucide-react';
 import { MESSAGES } from '../lib/utils/constants';
 import FlagIcon from '../components/fact-checks/FlagIcon';
-import MainPagePanels from '../components/MainPagePanels';
 import MainPageLayout from '../components/MainPageLayout';
 
-// Calculate trending score based on recent activity
+const GRID_ROWS = 2;
+const GRID_COLS = 3;
+const EPISODES_PER_PAGE = GRID_ROWS * GRID_COLS;
+const EPISODES_TO_FETCH = EPISODES_PER_PAGE * 2; // Fetch two pages worth for smooth transition
+
+// Modified to prioritize episode number for equal scores
 const calculateTrendingScore = (episode) => {
-  const now = new Date();
-  const dayInMs = 24 * 60 * 60 * 1000;
   const factChecks = episode.factChecks || [];
   let score = 0;
+  const now = new Date();
+  const dayInMs = 24 * 60 * 60 * 1000;
   
   factChecks.forEach(check => {
     const checkDate = check.createdAt?.toDate?.() || new Date(check.createdAt);
@@ -40,54 +44,44 @@ const TrendingEpisodeCard = ({ episode }) => {
   return (
     <Link
       href={`/episode/${episode.id}`}
-      className="group relative bg-white rounded-xl shadow-sm hover:shadow-md transition-all duration-300 overflow-hidden flex flex-col transform hover:scale-[1.02]"
+      className="group bg-white rounded-xl shadow-sm hover:shadow-lg transition-all duration-300 overflow-hidden flex flex-col h-full"
     >
       {episode.thumbnail && (
-        <div className="w-full h-36 overflow-hidden rounded-t-xl relative">
+        <div className="relative w-full pt-[56.25%]">
           <Image
             src={episode.thumbnail}
             alt={episode.title}
             fill
-            className="object-contain bg-black transition-transform duration-300 group-hover:scale-105"
+            sizes="(max-width: 768px) 100vw, (max-width: 1200px) 33vw, 25vw"
+            className="object-cover bg-gray-100 transition-transform duration-300 group-hover:scale-105"
           />
         </div>
       )}
-      <div className="p-4 flex-1 flex flex-col">
-        <h3 className="text-xl font-bold mb-2 text-gray-900 line-clamp-2 group-hover:text-blue-600 transition-colors">
+      <div className="p-6 flex-1 flex flex-col">
+        <h3 className="text-xl font-semibold mb-3 text-gray-900 line-clamp-2 group-hover:text-blue-600 transition-colors">
           {episode.title}
         </h3>
-        <p className="text-gray-600 mb-4">
+        <p className="text-gray-600 mb-4 text-sm">
           Guest: {episode.guest}
         </p>
-        <div className="mt-auto">
-          <div className="text-sm text-gray-500 mb-2">
-            {new Date(episode.date).toLocaleDateString()}
+        <div className="mt-auto space-y-4">
+          <div className="text-sm text-gray-500">
+            Episode #{episode.episodeNumber}
           </div>
           <div className="flex flex-wrap gap-2">
-            {stats?.VALIDATED_TRUE > 0 && (
-              <div className="flex items-center gap-1 px-2 py-1 bg-green-50 text-green-700 rounded-full text-sm">
-                <FlagIcon status="VALIDATED_TRUE" size={14} />
-                <span>{stats.VALIDATED_TRUE}</span>
+            {Object.entries(stats || {}).map(([status, count]) => count > 0 && (
+              <div key={status} 
+                className={`flex items-center gap-1 px-3 py-1.5 rounded-full text-sm font-medium ${
+                  status === 'VALIDATED_TRUE' ? 'bg-green-50 text-green-700' :
+                  status === 'VALIDATED_FALSE' ? 'bg-red-50 text-red-700' :
+                  status === 'VALIDATED_CONTROVERSIAL' ? 'bg-yellow-50 text-yellow-700' :
+                  'bg-gray-50 text-gray-700'
+                }`}
+              >
+                <FlagIcon status={status} size={14} />
+                <span>{count}</span>
               </div>
-            )}
-            {stats?.VALIDATED_FALSE > 0 && (
-              <div className="flex items-center gap-1 px-2 py-1 bg-red-50 text-red-700 rounded-full text-sm">
-                <FlagIcon status="VALIDATED_FALSE" size={14} />
-                <span>{stats.VALIDATED_FALSE}</span>
-              </div>
-            )}
-            {stats?.VALIDATED_CONTROVERSIAL > 0 && (
-              <div className="flex items-center gap-1 px-2 py-1 bg-yellow-50 text-yellow-700 rounded-full text-sm">
-                <FlagIcon status="VALIDATED_CONTROVERSIAL" size={14} />
-                <span>{stats.VALIDATED_CONTROVERSIAL}</span>
-              </div>
-            )}
-            {stats?.UNVALIDATED > 0 && (
-              <div className="flex items-center gap-1 px-2 py-1 bg-gray-50 text-gray-700 rounded-full text-sm">
-                <FlagIcon status="UNVALIDATED" size={14} />
-                <span>{stats.UNVALIDATED}</span>
-              </div>
-            )}
+            ))}
           </div>
         </div>
       </div>
@@ -98,7 +92,7 @@ const TrendingEpisodeCard = ({ episode }) => {
 const RecentEpisodeCard = ({ episode }) => (
   <Link
     href={`/episode/${episode.id}`}
-    className="group bg-white rounded-lg shadow-sm hover:shadow-md transition-all duration-300 p-6 flex gap-6 transform hover:scale-[1.01]"
+    className="group bg-white rounded-lg shadow-sm hover:shadow-md transition-all duration-300 p-6 flex gap-6"
   >
     {episode.thumbnail && (
       <div className="w-48 h-32 flex-shrink-0 overflow-hidden rounded-md relative">
@@ -118,7 +112,7 @@ const RecentEpisodeCard = ({ episode }) => (
         Guest: {episode.guest}
       </p>
       <div className="flex items-center gap-4 text-sm text-gray-500">
-        <span>{new Date(episode.date).toLocaleDateString()}</span>
+        <span>Episode #{episode.episodeNumber}</span>
         <span>•</span>
         <span>{episode.factChecks?.length || 0} fact checks</span>
       </div>
@@ -129,42 +123,48 @@ const RecentEpisodeCard = ({ episode }) => (
   </Link>
 );
 
-const SectionHeader = ({ icon: Icon, title, actionText, onAction }) => (
-  <div className="flex items-center justify-between mb-8">
-    <div className="flex items-center gap-3">
-      <div className="bg-black text-white p-2 rounded-lg">
-        <Icon className="w-6 h-6" />
-      </div>
-      <h2 className="text-2xl font-bold text-gray-900">{title}</h2>
-    </div>
-    {actionText && (
-      <button
-        onClick={onAction}
-        className="flex items-center gap-2 text-gray-600 hover:text-black transition-colors group"
-      >
-        {actionText}
-        <ChevronRight className="w-4 h-4 transform group-hover:translate-x-1 transition-transform" />
-      </button>
-    )}
-  </div>
-);
+const NavigationButton = ({ direction, onClick, disabled }) => {
+  const Icon = direction === 'prev' ? ChevronLeft : ChevronRight;
+  return (
+    <button
+      onClick={onClick}
+      disabled={disabled}
+      className={`
+        p-2 md:p-3 rounded-full bg-white text-gray-900 shadow-lg 
+        hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed 
+        transition-all duration-200 z-10 focus:outline-none focus:ring-2 
+        focus:ring-blue-500 focus:ring-offset-2
+      `}
+      aria-label={`${direction === 'prev' ? 'Previous' : 'Next'} episodes`}
+    >
+      <Icon className="w-4 h-4 md:w-5 md:h-5" />
+    </button>
+  );
+};
 
 export default function Home() {
   const [trendingEpisodes, setTrendingEpisodes] = useState([]);
   const [recentEpisodes, setRecentEpisodes] = useState([]);
-  const [currentTrendingIndex, setCurrentTrendingIndex] = useState(0);
+  const [currentPage, setCurrentPage] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [isAnimating, setIsAnimating] = useState(false);
-  const episodesPerPage = 5; // Show 4 episodes per row * 2 rows
 
   useEffect(() => {
     const fetchEpisodes = async () => {
       try {
-        const episodesSnapshot = await getDocs(collection(db, "episodes"));
-        let allEpisodes = [];
+        // Initial fetch with limit
+        const episodesQuery = query(
+          collection(db, "episodes"),
+          orderBy("episodeNumber", "desc"),
+          limit(EPISODES_TO_FETCH)
+        );
+        
+        const episodesSnapshot = await getDocs(episodesQuery);
+        let episodesWithFactChecks = [];
 
-        for (const episodeDoc of episodesSnapshot.docs) {
+        // Fetch fact checks in parallel for better performance
+        const factCheckPromises = episodesSnapshot.docs.map(async (episodeDoc) => {
           const episodeData = episodeDoc.data();
           const episodeId = episodeDoc.id;
 
@@ -178,25 +178,39 @@ export default function Home() {
             ...doc.data()
           }));
 
-          allEpisodes.push({
+          return {
             id: episodeId,
             ...episodeData,
-            factChecks
-          });
-        }
+            factChecks,
+            trendingScore: 0 // Will be calculated after all data is fetched
+          };
+        });
 
-        const trendingEpisodes = [...allEpisodes]
-          .sort((a, b) => calculateTrendingScore(b) - calculateTrendingScore(a));
+        episodesWithFactChecks = await Promise.all(factCheckPromises);
 
-        const recentEpisodes = [...allEpisodes]
-          .sort((a, b) => new Date(b.date) - new Date(a.date));
+        // Calculate trending scores and sort
+        episodesWithFactChecks.forEach(episode => {
+          episode.trendingScore = calculateTrendingScore(episode);
+        });
 
-        setTrendingEpisodes(trendingEpisodes);
-        setRecentEpisodes(recentEpisodes);
+        const sortedByTrending = [...episodesWithFactChecks].sort((a, b) => {
+          if (a.trendingScore === b.trendingScore) {
+            // Use episode number for secondary sorting
+            return b.episodeNumber - a.episodeNumber;
+          }
+          return b.trendingScore - a.trendingScore;
+        });
+
+        const sortedByEpisodeNumber = [...episodesWithFactChecks].sort((a, b) => 
+          b.episodeNumber - a.episodeNumber
+        );
+
+        setTrendingEpisodes(sortedByTrending);
+        setRecentEpisodes(sortedByEpisodeNumber);
+        setLoading(false);
       } catch (error) {
         console.error("Error fetching episodes:", error);
         setError(error.message);
-      } finally {
         setLoading(false);
       }
     };
@@ -204,20 +218,13 @@ export default function Home() {
     fetchEpisodes();
   }, []);
 
-  const handlePrevious = () => {
-    if (isAnimating || currentTrendingIndex === 0) return;
-    setIsAnimating(true);
-    setCurrentTrendingIndex(current => Math.max(0, current - episodesPerPage));
-    setTimeout(() => setIsAnimating(false), 500);
-  };
+  const totalPages = Math.ceil(trendingEpisodes.length / EPISODES_PER_PAGE);
 
-  const handleNext = () => {
-    if (isAnimating || currentTrendingIndex >= trendingEpisodes.length - episodesPerPage) return;
-    setIsAnimating(true);
-    setCurrentTrendingIndex(current => 
-      Math.min(current + episodesPerPage, Math.max(0, trendingEpisodes.length - episodesPerPage))
-    );
-    setTimeout(() => setIsAnimating(false), 500);
+  const handleNavigation = (direction) => {
+    const newPage = direction === 'next' 
+      ? Math.min(currentPage + 1, totalPages - 1)
+      : Math.max(0, currentPage - 1);
+    setCurrentPage(newPage);
   };
 
   if (loading) {
@@ -244,71 +251,54 @@ export default function Home() {
     );
   }
 
-  const pageCount = Math.ceil(trendingEpisodes.length / episodesPerPage);
-  const currentPage = Math.floor(currentTrendingIndex / episodesPerPage);
-  const displayedTrendingEpisodes = trendingEpisodes.slice(
-    currentTrendingIndex,
-    currentTrendingIndex + episodesPerPage
-  );
-
   return (
     <MainPageLayout>
-      <div className="space-y-16">
+      <div className="space-y-8 md:space-y-16 max-w-[1400px] mx-auto px-4 md:px-6">
         {/* Trending Episodes Section */}
         <section>
-          <SectionHeader 
-            icon={TrendingUp}
-            title="Trending Episodes"
-          />
-          <div className="relative">
-            {/* Navigation Buttons */}
-            <div className="absolute -left-4 top-1/2 transform -translate-y-1/2 z-10">
-              <button
-                onClick={handlePrevious}
-                disabled={currentTrendingIndex === 0 || isAnimating}
-                className="p-2 rounded-full bg-black text-white shadow-md hover:bg-gray-800 disabled:opacity-50 disabled:bg-gray-300 disabled:cursor-not-allowed transition-all duration-200"
-                aria-label="Previous episodes"
-              >
-                <ChevronLeft className="w-5 h-5" />
-              </button>
+          <div className="flex items-center justify-between mb-6 md:mb-8">
+            <div className="flex items-center gap-3">
+              <div className="bg-black text-white p-2 md:p-2.5 rounded-xl">
+                <TrendingUp className="w-5 h-5 md:w-6 md:h-6" />
+              </div>
+              <h2 className="text-xl md:text-2xl font-bold text-gray-900">Trending Episodes</h2>
             </div>
-            <div className="absolute -right-4 top-1/2 transform -translate-y-1/2 z-10">
-              <button
-                onClick={handleNext}
-                disabled={currentTrendingIndex >= trendingEpisodes.length - episodesPerPage || isAnimating}
-                className="p-2 rounded-full bg-black text-white shadow-md hover:bg-gray-800 disabled:opacity-50 disabled:bg-gray-300 disabled:cursor-not-allowed transition-all duration-200"
-                aria-label="Next episodes"
-              >
-                <ChevronRight className="w-5 h-5" />
-              </button>
+          </div>
+
+          <div className="relative px-8 md:px-12">
+            <div className="absolute left-0 top-0 bottom-0 flex items-center">
+              <NavigationButton
+                direction="prev"
+                onClick={() => handleNavigation('prev')}
+                disabled={currentPage === 0}
+              />
+            </div>
+            
+            <div className="absolute right-0 top-0 bottom-0 flex items-center">
+              <NavigationButton
+                direction="next"
+                onClick={() => handleNavigation('next')}
+                disabled={currentPage >= totalPages - 1}
+              />
             </div>
 
-            {/* Episodes Grid */}
-            <div className="overflow-hidden px-2">
-              <div 
-                className="grid grid-cols-4 gap-4 transition-transform duration-500 ease-in-out"
-                style={{ 
-                  transform: `translateX(-${(currentPage * 100)}%)`,
-                  width: `${pageCount * 100}%`
-                }}
-              >
-                {displayedTrendingEpisodes.map((episode) => (
-                  <TrendingEpisodeCard key={episode.id} episode={episode} />
-                ))}
+            <div>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6 auto-rows-fr">
+                {trendingEpisodes
+                  .slice(currentPage * EPISODES_PER_PAGE, (currentPage + 1) * EPISODES_PER_PAGE)
+                  .map((episode) => (
+                    <TrendingEpisodeCard key={episode.id} episode={episode} />
+                  ))}
               </div>
             </div>
 
-            {/* Progress Indicators */}
-            <div className="flex justify-center mt-6 gap-2">
-              {Array.from({ length: pageCount }).map((_, index) => (
+            <div className="flex justify-center mt-6 md:mt-8 gap-2">
+              {Array.from({ length: totalPages }).map((_, index) => (
                 <button
                   key={index}
                   onClick={() => {
-                    if (!isAnimating) {
-                      setIsAnimating(true);
-                      setCurrentTrendingIndex(index * episodesPerPage);
-                      setTimeout(() => setIsAnimating(false), 500);
-                    }
+                    handleNavigation(index > currentPage ? 'next' : 'prev');
+                    setCurrentPage(index);
                   }}
                   className={`h-2 rounded-full transition-all duration-300 ${
                     currentPage === index
@@ -324,10 +314,12 @@ export default function Home() {
 
         {/* Recent Episodes Section */}
         <section>
-          <SectionHeader 
-            icon={Clock}
-            title="Recent Episodes"
-          />
+          <div className="flex items-center gap-3 mb-8">
+            <div className="bg-black text-white p-2.5 rounded-xl">
+              <Clock className="w-6 h-6" />
+            </div>
+            <h2 className="text-2xl font-bold text-gray-900">Recent Episodes</h2>
+          </div>
           <div className="space-y-4">
             {recentEpisodes.slice(0, 5).map((episode) => (
               <RecentEpisodeCard key={episode.id} episode={episode} />
